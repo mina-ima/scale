@@ -5,6 +5,7 @@ import {
   endXrSession,
   initHitTestSource,
   getHitTestResult,
+  hasDetectedPlane,
 } from './utils';
 
 const mockRequestSession = vi.fn();
@@ -214,5 +215,22 @@ describe('getHitTestResult', () => {
     expect(mockGetHitTestResults).toHaveBeenCalledWith(mockXrHitTestSource);
     expect(mockHitResultGetPose).toHaveBeenCalledWith(mockXrReferenceSpace);
     expect(position).toBeNull();
+  });
+});
+
+describe('hasDetectedPlane', () => {
+  it('should return true if XRFrame has detected planes', () => {
+    const mockXrFrame = { detectedPlanes: { size: 1 } } as unknown as XRFrame;
+    expect(hasDetectedPlane(mockXrFrame)).toBe(true);
+  });
+
+  it('should return false if XRFrame has no detected planes', () => {
+    const mockXrFrame = { detectedPlanes: { size: 0 } } as unknown as XRFrame;
+    expect(hasDetectedPlane(mockXrFrame)).toBe(false);
+  });
+
+  it('should return false if detectedPlanes is undefined', () => {
+    const mockXrFrame = {} as unknown as XRFrame;
+    expect(hasDetectedPlane(mockXrFrame)).toBe(false);
   });
 });

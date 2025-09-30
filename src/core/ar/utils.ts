@@ -63,3 +63,9 @@ export const getHitTestResult = (
   }
   return null;
 };
+
+export const hasDetectedPlane = (frame: XRFrame): boolean => {
+  // detectedPlanes is an XRPlaneSet, which is iterable
+  // Check if it has any elements
+  return !!frame.detectedPlanes && frame.detectedPlanes.size > 0;
+};
