@@ -21,3 +21,13 @@ export const getCameraStream = async (): Promise<MediaStream | ErrorState> => {
     }
   }
 };
+
+export const stopCameraStream = (
+  stream: MediaStream | null | undefined
+): void => {
+  if (stream) {
+    stream.getTracks().forEach((track) => {
+      track.stop();
+    });
+  }
+};

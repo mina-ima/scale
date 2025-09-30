@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getCameraStream } from './utils';
+import { getCameraStream, stopCameraStream } from './utils';
 
 describe('getCameraStream', () => {
   const mockGetUserMedia = vi.fn();
@@ -46,5 +46,26 @@ describe('getCameraStream', () => {
       message: 'Failed to get camera stream: Some other error',
     });
     expect(mockGetUserMedia).toHaveBeenCalledWith({ video: true });
+  });
+});
+
+describe('stopCameraStream', () => {
+  it('should stop all tracks in the MediaStream', () => {
+    const mockTrack1 = { stop: vi.fn() } as unknown as MediaStreamTrack;
+    const mockTrack2 = { stop: vi.fn() } as unknown as MediaStreamTrack;
+    const mockStream = {
+      getTracks: vi.fn(() => [mockTrack1, mockTrack2]),
+    } as unknown as MediaStream;
+
+    stopCameraStream(mockStream);
+
+    expect(mockStream.getTracks).toHaveBeenCalledTimes(1);
+    expect(mockTrack1.stop).toHaveBeenCalledTimes(1);
+    expect(mockTrack2.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not throw error if stream is null or undefined', () => {
+    expect(() => stopCameraStream(null)).not.toThrow();
+    expect(() => stopCameraStream(undefined)).not.toThrow();
   });
 });
