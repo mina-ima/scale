@@ -17,8 +17,8 @@
 
 ## 1. リポジトリ初期化（P0）
 
-- [ ] Vite + React + TypeScript で雛形生成（`pnpm create vite@latest`）。
-- [ ] ESLint + Prettier 設定、`tsconfig.json` 厳格化（`strict: true`）。
+- [x] Vite + React + TypeScript で雛形生成（`pnpm create vite@latest`）。
+- [x] ESLint + Prettier 設定、`tsconfig.json` 厳格化（`strict: true`）。
 - [ ] `src/` のディレクトリを仕様の構成に合わせて作成。
 - [ ] Zustand / Three.js / @types/webxr を追加インストール。
 - [ ] テスト環境: Jest + Testing Library、E2E: Playwright を導入。
@@ -64,7 +64,7 @@
 - [ ] 3D 距離計算（WebXR）。
 - [x] 2D 距離計算（フォールバック、スケール適用）。
 - [x] 単位換算と小数1桁丸め（内部は mm）。
-- [ ] 最大距離 10m ガード（超過時は2点目拒否）。
+- [x] 最大距離 10m ガード（超過時は2点目拒否）。
 
 ## 8. core/render（P0）
 
