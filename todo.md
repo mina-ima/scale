@@ -20,7 +20,7 @@
 - [x] Vite + React + TypeScript で雛形生成（`pnpm create vite@latest`）。
 - [x] ESLint + Prettier 設定、`tsconfig.json` 厳格化（`strict: true`）。
 - [x] `src/` のディレクトリを仕様の構成に合わせて作成。
-- [ ] Zustand / Three.js / @types/webxr を追加インストール。
+- [x] Zustand / Three.js / @types/webxr を追加インストール。
 - [ ] テスト環境: Jest + Testing Library、E2E: Playwright を導入。
 - [ ] GitHub Actions で CI（lint / type-check / unit / e2e）を追加。
 - [ ] Vercel にプロジェクト連携（main ブランチ → Production / PR → Preview）。
