@@ -4,6 +4,7 @@ import {
   startXrSession,
   endXrSession,
   initHitTestSource,
+  getHitTestResult,
 } from './utils';
 
 const mockRequestSession = vi.fn();
@@ -126,5 +127,92 @@ describe('initHitTestSource', () => {
       mockXrSession as unknown as XRSession
     );
     expect(hitTestSource).toBeNull();
+  });
+});
+
+describe('getHitTestResult', () => {
+  const mockGetHitTestResults = vi.fn();
+  const mockHitResultGetPose = vi.fn();
+  const mockXrFrame = {
+    getHitTestResults: mockGetHitTestResults,
+  } as unknown as XRFrame;
+  const mockXrHitTestSource = {} as XRHitTestSource;
+  const mockXrReferenceSpace = {} as XRReferenceSpace;
+
+  beforeEach(() => {
+    mockGetHitTestResults.mockReset();
+    mockHitResultGetPose.mockReset();
+  });
+
+  it('should return the first hit result position if available', () => {
+    const mockHitResult = {
+      getPose: mockHitResultGetPose,
+    } as unknown as XRHitResult;
+    const mockPose = {
+      transform: {
+        position: { x: 1, y: 2, z: 3 },
+      },
+    } as XRPose;
+    mockGetHitTestResults.mockReturnValue([mockHitResult]);
+    mockHitResultGetPose.mockReturnValue(mockPose);
+
+    const position = getHitTestResult(
+      mockXrFrame,
+      mockXrHitTestSource,
+      mockXrReferenceSpace
+    );
+    expect(mockGetHitTestResults).toHaveBeenCalledWith(mockXrHitTestSource);
+    expect(mockHitResultGetPose).toHaveBeenCalledWith(mockXrReferenceSpace);
+    expect(position).toEqual({ x: 1, y: 2, z: 3 });
+  });
+
+  it('should return null if no hit results are found', () => {
+    mockGetHitTestResults.mockReturnValue([]);
+
+    const position = getHitTestResult(
+      mockXrFrame,
+      mockXrHitTestSource,
+      mockXrReferenceSpace
+    );
+    expect(mockGetHitTestResults).toHaveBeenCalledWith(mockXrHitTestSource);
+    expect(mockHitResultGetPose).not.toHaveBeenCalled();
+    expect(position).toBeNull();
+  });
+
+  it('should return null if getPose returns null', () => {
+    const mockHitResult = {
+      getPose: mockHitResultGetPose,
+    } as unknown as XRHitResult;
+    mockGetHitTestResults.mockReturnValue([mockHitResult]);
+    mockHitResultGetPose.mockReturnValue(null);
+
+    const position = getHitTestResult(
+      mockXrFrame,
+      mockXrHitTestSource,
+      mockXrReferenceSpace
+    );
+    expect(mockGetHitTestResults).toHaveBeenCalledWith(mockXrHitTestSource);
+    expect(mockHitResultGetPose).toHaveBeenCalledWith(mockXrReferenceSpace);
+    expect(position).toBeNull();
+  });
+
+  it('should return null if pose has no position', () => {
+    const mockHitResult = {
+      getPose: mockHitResultGetPose,
+    } as unknown as XRHitResult;
+    const mockPose = {
+      transform: {},
+    } as XRPose;
+    mockGetHitTestResults.mockReturnValue([mockHitResult]);
+    mockHitResultGetPose.mockReturnValue(mockPose);
+
+    const position = getHitTestResult(
+      mockXrFrame,
+      mockXrHitTestSource,
+      mockXrReferenceSpace
+    );
+    expect(mockGetHitTestResults).toHaveBeenCalledWith(mockXrHitTestSource);
+    expect(mockHitResultGetPose).toHaveBeenCalledWith(mockXrReferenceSpace);
+    expect(position).toBeNull();
   });
 });

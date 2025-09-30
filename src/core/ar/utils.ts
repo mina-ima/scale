@@ -43,3 +43,23 @@ export const initHitTestSource = async (
     return null;
   }
 };
+
+export const getHitTestResult = (
+  frame: XRFrame,
+  hitTestSource: XRHitTestSource,
+  referenceSpace: XRReferenceSpace
+): { x: number; y: number; z: number } | null => {
+  const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+  if (hitTestResults.length > 0) {
+    const hit = hitTestResults[0];
+    const pose = hit.getPose(referenceSpace);
+    if (pose) {
+      const position = pose.transform.position;
+      if (position) {
+        return { x: position.x, y: position.y, z: position.z };
+      }
+    }
+  }
+  return null;
+};
