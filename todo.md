@@ -30,7 +30,7 @@
 - [ ] ルーティング: トップ（モード選択）/計測/成長記録の 3 画面。
 - [ ] グローバル状態（Zustand）骨格: `measureMode`, `scale`, `error`。
 - [ ] 環境判定: `supportsWebXR()` 実装と分岐（AR/フォールバック）。
-- [ ] UI コンポーネント: ボタン、トースト、ダイアログ、タブ。 (タブ完了)
+- [x] UI コンポーネント: ボタン、トースト、ダイアログ、タブ。 (タブ完了)
 
 ## 3. core/camera（P0）
 
@@ -120,10 +120,13 @@
 
 ## 15. データ/型/ユーティリティ（P0）
 
-- [ ] TypeScript 型: `MeasurementResult`, `ScaleEstimation`, `MeasureMode`。
-- [ ] 日付処理（端末ローカル→ISO 変換、手動修正可）。
+- [x] TypeScript 型: `MeasurementResult`, `ScaleEstimation`, `MeasureMode`。
+- [ ] TypeScript 型: RetirementRule, Seniority
+
+- [x] 日付処理（端末ローカル→ISO 変換、手動修正可）。
 - [ ] Exif/回転補正（必要時）。
-- [ ] 文字色切替の輝度判定（YUV/HSV の Y）。
+
+- [x] 文字色切替の輝度判定（YUV/HSV の Y）。
 
 ## 16. 単体テスト（Jest）（P0）
 
