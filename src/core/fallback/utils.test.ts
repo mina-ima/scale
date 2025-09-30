@@ -1,0 +1,222 @@
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import { capturePhoto, getTapCoordinates } from './utils';
+
+describe('capturePhoto', () => {
+  let mockVideoElement: HTMLVideoElement & { onloadedmetadata: Mock };
+  let mockCanvasElement: HTMLCanvasElement & { toBlob: Mock; getContext: Mock };
+  let mockCanvasContext: CanvasRenderingContext2D & { drawImage: Mock };
+  let originalCreateElement: typeof document.createElement;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    originalCreateElement = document.createElement;
+    mockVideoElement = {
+      srcObject: {} as MediaStream,
+      onloadedmetadata: vi.fn(),
+    } as HTMLVideoElement & { onloadedmetadata: Mock };
+
+    mockCanvasContext = {
+      drawImage: vi.fn(),
+      canvas: { toBlob: vi.fn() as Mock } as unknown as HTMLCanvasElement,
+    } as CanvasRenderingContext2D & { drawImage: Mock };
+
+    mockCanvasElement = {
+      getContext: vi.fn(() => mockCanvasContext) as Mock,
+      width: 0,
+      height: 0,
+      toBlob: vi.fn(),
+    } as HTMLCanvasElement & { toBlob: Mock; getContext: Mock };
+
+    Object.defineProperty(mockVideoElement, 'videoWidth', {
+      writable: true,
+      value: 1920,
+    });
+    Object.defineProperty(mockVideoElement, 'videoHeight', {
+      writable: true,
+      value: 1080,
+    });
+  });
+
+  afterEach(() => {
+    document.createElement = originalCreateElement;
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  it('should capture a photo from the video stream and return a Blob', async () => {
+    const mockBlob = new Blob(['test'], { type: 'image/png' });
+    mockCanvasElement.toBlob.mockImplementationOnce((callback: BlobCallback) =>
+      callback(mockBlob)
+    );
+
+    const stream = {} as MediaStream;
+    const capturePromise = capturePhoto(stream, 1080);
+
+    // onloadedmetadataが設定されるのを待つ
+    await vi.runOnlyPendingTimersAsync();
+
+    // onloadedmetadataに設定されたコールバックを呼び出す
+    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
+      .mock.calls[0][0];
+    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
+    onLoadedMetadataCallback(); // コールバックを実行
+
+    const result = await capturePromise;
+
+    expect(document.createElement).toHaveBeenCalledWith('video');
+    expect(document.createElement).toHaveBeenCalledWith('canvas');
+    expect(mockVideoElement.srcObject).toBe(stream);
+    expect(mockCanvasElement.getContext).toHaveBeenCalledWith('2d');
+    expect(mockCanvasContext.drawImage).toHaveBeenCalledWith(
+      mockVideoElement,
+      0,
+      0,
+      1920,
+      1080
+    );
+    expect(mockCanvasElement.toBlob).toHaveBeenCalledWith(
+      expect.any(Function),
+      'image/png',
+      1
+    );
+    expect(result).toBe(mockBlob);
+  });
+
+  it('should resize the image to meet the minimum length requirement', async () => {
+    Object.defineProperty(mockVideoElement, 'videoWidth', {
+      writable: true,
+      value: 800,
+    });
+    Object.defineProperty(mockVideoElement, 'videoHeight', {
+      writable: true,
+      value: 600,
+    });
+    const mockBlob = new Blob(['test'], { type: 'image/png' });
+    mockCanvasElement.toBlob.mockImplementationOnce((callback: BlobCallback) =>
+      callback(mockBlob)
+    );
+
+    const stream = {} as MediaStream;
+    const capturePromise = capturePhoto(stream, 1080);
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
+    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
+      .mock.calls[0][0];
+    onLoadedMetadataCallback();
+
+    await capturePromise;
+
+    // Expect canvas to be resized to 1440x1080 (maintaining aspect ratio, min length 1080)
+    expect(mockCanvasElement.width).toBe(1440);
+    expect(mockCanvasElement.height).toBe(1080);
+    expect(mockCanvasContext.drawImage).toHaveBeenCalledWith(
+      mockVideoElement,
+      0,
+      0,
+      1440,
+      1080
+    );
+  });
+
+  it('should handle cases where video dimensions are already larger than min length', async () => {
+    Object.defineProperty(mockVideoElement, 'videoWidth', {
+      writable: true,
+      value: 2000,
+    });
+    Object.defineProperty(mockVideoElement, 'videoHeight', {
+      writable: true,
+      value: 1500,
+    });
+    const mockBlob = new Blob(['test'], { type: 'image/png' });
+    mockCanvasElement.toBlob.mockImplementationOnce((callback: BlobCallback) =>
+      callback(mockBlob)
+    );
+
+    const stream = {} as MediaStream;
+    const capturePromise = capturePhoto(stream, 1080);
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
+    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
+      .mock.calls[0][0];
+    onLoadedMetadataCallback();
+
+    await capturePromise;
+
+    // Expect canvas to use original video dimensions
+    expect(mockCanvasElement.width).toBe(2000);
+    expect(mockCanvasElement.height).toBe(1500);
+    expect(mockCanvasContext.drawImage).toHaveBeenCalledWith(
+      mockVideoElement,
+      0,
+      0,
+      2000,
+      1500
+    );
+  });
+
+  it('should return null if toBlob fails', async () => {
+    mockCanvasElement.toBlob.mockImplementationOnce((callback: BlobCallback) =>
+      callback(null)
+    );
+
+    const stream = {} as MediaStream;
+    const capturePromise = capturePhoto(stream, 1080);
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
+    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
+      .mock.calls[0][0];
+    onLoadedMetadataCallback();
+
+    const result = await capturePromise;
+
+    expect(result).toBeNull();
+  });
+
+  it('should return null if getContext returns null', async () => {
+    mockCanvasElement.getContext.mockReturnValue(null);
+
+    const stream = {} as MediaStream;
+    const capturePromise = capturePhoto(stream, 1080);
+
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
+    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
+      .mock.calls[0][0];
+    onLoadedMetadataCallback();
+
+    const result = await capturePromise;
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('getTapCoordinates', () => {
+  it('should return correct image coordinates for a tap event', () => {
+    const mockEvent = { clientX: 60, clientY: 45 } as MouseEvent;
+    const mockRect = {
+      left: 10,
+      top: 20,
+      width: 100,
+      height: 50,
+    } as DOMRect;
+
+    const mockElement = {
+      getBoundingClientRect: () => mockRect,
+      naturalWidth: 200,
+      naturalHeight: 100,
+      videoWidth: 0,
+      videoHeight: 0,
+    };
+
+    const result = getTapCoordinates(mockEvent, mockElement);
+
+    expect(result).toEqual({ x: 100, y: 50 });
+  });
+});
