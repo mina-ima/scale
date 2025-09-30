@@ -6,6 +6,7 @@ import {
   initHitTestSource,
   getHitTestResult,
   hasDetectedPlane,
+  getSmoothedPosition,
 } from './utils';
 
 const mockRequestSession = vi.fn();
@@ -232,5 +233,33 @@ describe('hasDetectedPlane', () => {
   it('should return false if detectedPlanes is undefined', () => {
     const mockXrFrame = {} as unknown as XRFrame;
     expect(hasDetectedPlane(mockXrFrame)).toBe(false);
+  });
+});
+
+describe('getSmoothedPosition', () => {
+  it('should return the average of positions', () => {
+    const positions = [
+      { x: 1, y: 1, z: 1 },
+      { x: 2, y: 2, z: 2 },
+      { x: 3, y: 3, z: 3 },
+    ];
+    expect(getSmoothedPosition(positions)).toEqual({ x: 2, y: 2, z: 2 });
+  });
+
+  it('should return null for empty positions array', () => {
+    expect(getSmoothedPosition([])).toBeNull();
+  });
+
+  it('should handle single position', () => {
+    const positions = [{ x: 5, y: 5, z: 5 }];
+    expect(getSmoothedPosition(positions)).toEqual({ x: 5, y: 5, z: 5 });
+  });
+
+  it('should handle positions with decimal values', () => {
+    const positions = [
+      { x: 1.1, y: 2.2, z: 3.3 },
+      { x: 2.1, y: 3.2, z: 4.3 },
+    ];
+    expect(getSmoothedPosition(positions)).toEqual({ x: 1.6, y: 2.7, z: 3.8 });
   });
 });

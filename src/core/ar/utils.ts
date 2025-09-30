@@ -69,3 +69,26 @@ export const hasDetectedPlane = (frame: XRFrame): boolean => {
   // Check if it has any elements
   return !!frame.detectedPlanes && frame.detectedPlanes.size > 0;
 };
+
+export const getSmoothedPosition = (
+  positions: { x: number; y: number; z: number }[]
+): { x: number; y: number; z: number } | null => {
+  if (positions.length === 0) {
+    return null;
+  }
+
+  const sum = positions.reduce(
+    (acc, pos) => ({
+      x: acc.x + pos.x,
+      y: acc.y + pos.y,
+      z: acc.z + pos.z,
+    }),
+    { x: 0, y: 0, z: 0 }
+  );
+
+  return {
+    x: sum.x / positions.length,
+    y: sum.y / positions.length,
+    z: sum.z / positions.length,
+  };
+};
