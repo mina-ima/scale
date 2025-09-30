@@ -27,15 +27,15 @@
 
 ## 2. ベース実装（P0）
 
-- [ ] ルーティング: トップ（モード選択）/計測/成長記録の 3 画面。
-- [ ] グローバル状態（Zustand）骨格: `measureMode`, `scale`, `error`。
-- [ ] 環境判定: `supportsWebXR()` 実装と分岐（AR/フォールバック）。
+- [x] ルーティング: トップ（モード選択）/計測/成長記録の 3 画面。
+- [x] グローバル状態（Zustand）骨格: `measureMode`, `scale`, `error`。
+- [x] 環境判定: `supportsWebXR()` 実装と分岐（AR/フォールバック）。
 - [x] UI コンポーネント: ボタン、トースト、ダイアログ、タブ。 (タブ完了)
 
 ## 3. core/camera（P0）
 
-- [ ] `getUserMedia` 取得、権限拒否時のエラー分類（`CAMERA_DENIED`）。
-- [ ] ストリーム開始/停止 API、画面回転・向き固定対応。
+- [x] `getUserMedia` 取得、権限拒否時のエラー分類（`CAMERA_DENIED`）。
+- [x] ストリーム開始/停止 API、画面回転・向き固定対応。
 
 ## 4. core/ar（P0）
 
