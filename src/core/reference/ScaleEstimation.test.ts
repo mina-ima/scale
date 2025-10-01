@@ -156,3 +156,51 @@ describe('shouldConfirmScaleEstimation', () => {
     expect(shouldConfirmScaleEstimation(result2)).toBe(false);
   });
 });
+
+describe('shouldConfirmScaleEstimation', () => {
+  it('should return true if confidence is below the threshold', () => {
+    const result: ScaleEstimationResult = {
+      mmPerPx: 1,
+      confidence: 0.6,
+      matchedReferenceObject: A4_PAPER,
+      matchedDetectedRectangle: null,
+    };
+    expect(shouldConfirmScaleEstimation(result, 0.7)).toBe(true);
+  });
+
+  it('should return false if confidence is at or above the threshold', () => {
+    const result: ScaleEstimationResult = {
+      mmPerPx: 1,
+      confidence: 0.7,
+      matchedReferenceObject: A4_PAPER,
+      matchedDetectedRectangle: null,
+    };
+    expect(shouldConfirmScaleEstimation(result, 0.7)).toBe(false);
+
+    const result2: ScaleEstimationResult = {
+      mmPerPx: 1,
+      confidence: 0.8,
+      matchedReferenceObject: A4_PAPER,
+      matchedDetectedRectangle: null,
+    };
+    expect(shouldConfirmScaleEstimation(result2, 0.7)).toBe(false);
+  });
+
+  it('should use the default threshold if none is provided', () => {
+    const result: ScaleEstimationResult = {
+      mmPerPx: 1,
+      confidence: 0.6, // Below default 0.7
+      matchedReferenceObject: A4_PAPER,
+      matchedDetectedRectangle: null,
+    };
+    expect(shouldConfirmScaleEstimation(result)).toBe(true);
+
+    const result2: ScaleEstimationResult = {
+      mmPerPx: 1,
+      confidence: 0.7, // At default 0.7
+      matchedReferenceObject: A4_PAPER,
+      matchedDetectedRectangle: null,
+    };
+    expect(shouldConfirmScaleEstimation(result2)).toBe(false);
+  });
+});

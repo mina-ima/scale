@@ -63,7 +63,6 @@ export const estimateScale = (
 
   return bestResult;
 };
-
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7; // Example threshold
 
 export const shouldConfirmScaleEstimation = (
