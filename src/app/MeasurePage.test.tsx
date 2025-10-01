@@ -128,4 +128,28 @@ describe('MeasurePage', () => {
     expect(screen.queryByText('123.5 cm')).not.toBeInTheDocument();
     expect(useMeasureStore.getState().points.length).toBe(0);
   });
+
+  it('should display a message if WebXR is not supported', () => {
+    // Mock navigator.xr to be undefined
+    Object.defineProperty(navigator, 'xr', {
+      writable: true,
+      value: undefined,
+    });
+    render(<MeasurePage />);
+    expect(
+      screen.getByText('WebXR (AR) is not supported on this device.')
+    ).toBeInTheDocument();
+  });
+
+  it('should not display a message if WebXR is supported', () => {
+    // Mock navigator.xr to be an object (simulating support)
+    Object.defineProperty(navigator, 'xr', {
+      writable: true,
+      value: {},
+    });
+    render(<MeasurePage />);
+    expect(
+      screen.queryByText('WebXR (AR) is not supported on this device.')
+    ).not.toBeInTheDocument();
+  });
 });

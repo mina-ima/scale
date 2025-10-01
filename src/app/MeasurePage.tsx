@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useMeasureStore } from '../store/measureStore';
 import { getTapCoordinates } from '../core/fallback/utils';
 import { calculate2dDistance } from '../core/measure/calculate2dDistance';
@@ -11,6 +11,7 @@ import {
 const MeasurePage: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isWebXrSupported, setIsWebXrSupported] = useState(true);
 
   const {
     points,
@@ -23,6 +24,12 @@ const MeasurePage: React.FC = () => {
     unit,
     setUnit,
   } = useMeasureStore();
+
+  useEffect(() => {
+    if (!navigator.xr) {
+      setIsWebXrSupported(false);
+    }
+  }, []);
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -121,6 +128,11 @@ const MeasurePage: React.FC = () => {
       />
       <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded">
         <h1 className="text-xl font-bold">計測モード</h1>
+        {!isWebXrSupported && (
+          <p className="text-red-500 text-sm mb-2">
+            WebXR (AR) is not supported on this device.
+          </p>
+        )}
         {measurement?.valueMm && (
           <p className="text-lg">
             {formatMeasurement(measurement.valueMm, unit)}
