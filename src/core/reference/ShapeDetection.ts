@@ -25,18 +25,31 @@ export const detectShapes = (): {
   return { rectangles: [], circles: [] };
 };
 
-// Placeholder for filtering function
 export const filterRectanglesByReference = (
   rectangles: DetectedRectangle[],
   reference: ReferenceObject,
-  tolerance: number = 0.1 // 10% tolerance for aspect ratio
+  tolerance = 0.1 // 10% tolerance for aspect ratio
 ): DetectedRectangle[] => {
-  const referenceAspectRatio = reference.widthMm / reference.heightMm;
+  // 基準オブジェクトのアスペクト比（横長）
+  const aspect1 = reference.widthMm / reference.heightMm;
+  // 基準オブジェクトのアスペクト比（縦長）
+  const aspect2 = reference.heightMm / reference.widthMm;
+
   return rectangles.filter((rect) => {
-    const rectAspectRatio = rect.width / rect.height;
-    return (
-      Math.abs(rectAspectRatio - referenceAspectRatio) <=
-      referenceAspectRatio * tolerance
-    );
+    const rectAspect = rect.aspectRatio;
+
+    // 横長（aspect1）との差が許容範囲内か
+    const diff1 = Math.abs(rectAspect - aspect1);
+    if (diff1 <= aspect1 * tolerance) {
+      return true;
+    }
+
+    // 縦長（aspect2）との差が許容範囲内か
+    const diff2 = Math.abs(rectAspect - aspect2);
+    if (diff2 <= aspect2 * tolerance) {
+      return true;
+    }
+
+    return false;
   });
 };
