@@ -18,7 +18,6 @@
 本プロジェクトでは、**Node.js 20.x (LTS)** の使用を推奨しています。
 他のバージョン（例: 22.x）でも動作する可能性がありますが、予期せぬ不具合が発生する可能性があるため、推奨バージョンでの開発を強くお勧めします。
 
-
 ## セットアップ
 
 ```bash
@@ -31,17 +30,17 @@ pnpm install
 
 ## 開発コマンド
 
-*   **開発サーバーの起動:** `pnpm dev`
-*   **テストの実行:** `pnpm test`
-*   **コードのフォーマット:** `pnpm format`
-*   **Lintの実行:** `pnpm lint`
-*   **型チェックの実行:** `pnpm typecheck`
+- **開発サーバーの起動:** `pnpm dev`
+- **テストの実行:** `pnpm test`
+- **コードのフォーマット:** `pnpm format`
+- **Lintの実行:** `pnpm lint`
+- **型チェックの実行:** `pnpm typecheck`
 
 ## テクノロジー
 
-*   **フレームワーク:** Vite + React (または Preact) with TypeScript
-*   **3D & AR:** Three.js and the WebXR API
-*   **フォールバック:** WebXR非対応デバイス向け写真ベース測定システム
-*   **状態管理:** Zustand
-*   **ホスティング:** Vercel
-*   **テスト:** Jest (ユニットテスト), Playwright (E2Eテスト)
+- **フレームワーク:** Vite + React (または Preact) with TypeScript
+- **3D & AR:** Three.js and the WebXR API
+- **フォールバック:** WebXR非対応デバイス向け写真ベース測定システム
+- **状態管理:** Zustand
+- **ホスティング:** Vercel
+- **テスト:** Jest (ユニットテスト), Playwright (E2Eテスト)

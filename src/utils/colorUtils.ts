@@ -1,19 +1,42 @@
+/**
+ * Calculates the perceived brightness of an RGB color and returns either black or white
+ * for the best contrast.
+ * @param r - Red value (0-255)
+ * @param g - Green value (0-255)
+ * @param b - Blue value (0-255)
+ * @returns '#000000' for black or '#FFFFFF' for white.
+ */
 export const getContrastTextColor = (
   r: number,
   g: number,
   b: number
 ): string => {
-  // Calculate luminance using the standard formula
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  // Formula from http://www.w3.org/TR/AERT#color-contrast
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness >= 128 ? '#000000' : '#FFFFFF';
+};
 
-  // Use a threshold to determine whether to return black or white
-  // A common threshold is 0.5 (for luminance normalized to 0-1)
-  // or 128 (for luminance normalized to 0-255)
-  const threshold = 0.5;
+/**
+ * Analyzes a region of an image to determine the optimal text color (black or white)
+ * for readability against the background.
+ * @param imageData - The ImageData object for the region.
+ * @returns '#000000' for black or '#FFFFFF' for white.
+ */
+export const getOptimalTextColorForRegion = (imageData: ImageData): string => {
+  const data = imageData.data;
+  let totalBrightness = 0;
+  const pixelCount = data.length / 4;
 
-  if (luminance > threshold) {
-    return '#000000'; // Light background, return black text
-  } else {
-    return '#FFFFFF'; // Dark background, return white text
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    // Using the same W3C formula for consistency
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    totalBrightness += brightness;
   }
+
+  const avgBrightness = totalBrightness / pixelCount;
+
+  return avgBrightness >= 128 ? '#000000' : '#FFFFFF';
 };

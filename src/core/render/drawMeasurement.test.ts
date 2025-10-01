@@ -1,65 +1,104 @@
-import { drawMeasurementLine } from './drawMeasurement';
-import { Point } from '../fallback/utils';
+import { describe, it, expect, vi } from 'vitest';
+import { drawMeasurementLine, drawMeasurementLabel } from './drawMeasurement';
+import * as colorUtils from '../../utils/colorUtils';
 
-describe('drawMeasurementLine', () => {
-  let mockContext: CanvasRenderingContext2D;
+// Mock the color utility
+vi.mock('../../utils/colorUtils', () => ({
+  getOptimalTextColorForRegion: vi.fn(),
+}));
 
-  beforeEach(() => {
-    mockContext = {
+describe('drawMeasurement', () => {
+  const getMockContext = () => {
+    const mockCtx = {
       beginPath: vi.fn(),
       moveTo: vi.fn(),
       lineTo: vi.fn(),
       stroke: vi.fn(),
       arc: vi.fn(),
       fill: vi.fn(),
-      closePath: vi.fn(),
+      measureText: vi.fn(() => ({ width: 100 })),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      getImageData: vi.fn(() => ({
+        data: new Uint8ClampedArray([0, 0, 0, 255]),
+      })),
+      font: '',
       fillStyle: '',
       strokeStyle: '',
       lineWidth: 0,
-    } as unknown as CanvasRenderingContext2D; // Cast to mock context
+      textAlign: '',
+      textBaseline: '',
+    };
+    return mockCtx as unknown as CanvasRenderingContext2D;
+  };
+
+  describe('drawMeasurementLine', () => {
+    it('should draw a line and two points', () => {
+      const ctx = getMockContext();
+      const p1 = { x: 10, y: 20 };
+      const p2 = { x: 110, y: 120 };
+
+      drawMeasurementLine(ctx, p1, p2);
+
+      expect(ctx.beginPath).toHaveBeenCalledTimes(3);
+      expect(ctx.moveTo).toHaveBeenCalledWith(p1.x, p1.y);
+      expect(ctx.lineTo).toHaveBeenCalledWith(p2.x, p2.y);
+      expect(ctx.stroke).toHaveBeenCalledOnce();
+      expect(ctx.arc).toHaveBeenCalledWith(
+        p1.x,
+        p1.y,
+        expect.any(Number),
+        0,
+        2 * Math.PI
+      );
+      expect(ctx.arc).toHaveBeenCalledWith(
+        p2.x,
+        p2.y,
+        expect.any(Number),
+        0,
+        2 * Math.PI
+      );
+      expect(ctx.fill).toHaveBeenCalledTimes(2);
+    });
   });
 
-  it('should call beginPath, moveTo, lineTo, and stroke for the line', () => {
-    const p1: Point = { x: 10, y: 10 };
-    const p2: Point = { x: 90, y: 90 };
-    drawMeasurementLine(mockContext, p1, p2);
+  describe('drawMeasurementLabel', () => {
+    it('should determine optimal text color and draw text with background', () => {
+      const ctx = getMockContext();
+      const text = '123.4 cm';
+      const x = 150;
+      const y = 100;
+      const mockTextColor = '#000000';
 
-    expect(mockContext.beginPath).toHaveBeenCalledTimes(3);
-    expect(mockContext.moveTo).toHaveBeenCalledWith(p1.x, p1.y);
-    expect(mockContext.lineTo).toHaveBeenCalledWith(p2.x, p2.y); // Corrected typo
-    expect(mockContext.stroke).toHaveBeenCalledTimes(1);
-  });
+      // Setup mock return value
+      const mockedGetColor = vi.spyOn(
+        colorUtils,
+        'getOptimalTextColorForRegion'
+      );
+      mockedGetColor.mockReturnValue(mockTextColor);
 
-  it('should call beginPath, arc, and fill for the endpoint circles', () => {
-    const p1: Point = { x: 10, y: 10 };
-    const p2: Point = { x: 90, y: 90 };
-    const radius = 5;
-    drawMeasurementLine(mockContext, p1, p2, '#00FF00', radius);
+      drawMeasurementLabel(ctx, text, x, y);
 
-    expect(mockContext.arc).toHaveBeenCalledWith(
-      p1.x,
-      p1.y,
-      radius,
-      0,
-      Math.PI * 2
-    );
-    expect(mockContext.arc).toHaveBeenCalledWith(
-      p2.x,
-      p2.y,
-      radius,
-      0,
-      Math.PI * 2
-    );
-    expect(mockContext.fill).toHaveBeenCalledTimes(2); // One for each circle
-  });
+      // Verify getImageData is called for the background area
+      expect(ctx.getImageData).toHaveBeenCalledOnce();
+      const FONT_SIZE = 48;
+      const TEXT_PADDING = 10;
+      const textWidth = 100; // from mock measureText
+      expect(ctx.getImageData).toHaveBeenCalledWith(
+        x - textWidth / 2 - TEXT_PADDING,
+        y - FONT_SIZE / 2 - TEXT_PADDING,
+        textWidth + TEXT_PADDING * 2,
+        FONT_SIZE + TEXT_PADDING * 2
+      );
 
-  it('should use the specified color for stroke and fill', () => {
-    const p1: Point = { x: 10, y: 10 };
-    const p2: Point = { x: 90, y: 90 };
-    const color = '#0000FF';
-    drawMeasurementLine(mockContext, p1, p2, color);
+      // Verify the color utility was called
+      expect(mockedGetColor).toHaveBeenCalledOnce();
 
-    expect(mockContext.strokeStyle).toBe(color);
-    expect(mockContext.fillStyle).toBe(color);
+      // Verify background and text are drawn with the correct color
+      expect(ctx.fillRect).toHaveBeenCalledOnce();
+      expect(ctx.fillText).toHaveBeenCalledOnce();
+      expect(ctx.fillStyle).toBe(mockTextColor);
+      expect(ctx.fillText).toHaveBeenCalledWith(text, x, y);
+    });
   });
 });

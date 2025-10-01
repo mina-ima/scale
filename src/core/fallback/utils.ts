@@ -62,7 +62,7 @@ interface MeasurableElement {
   videoHeight?: number;
 }
 
-interface Point {
+export interface Point {
   x: number;
   y: number;
 }
