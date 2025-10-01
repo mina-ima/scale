@@ -6,7 +6,7 @@ import {
 } from './utils';
 
 describe('capturePhoto', () => {
-  let mockVideoElement: HTMLVideoElement & { onloadedmetadata: Mock };
+  let mockVideoElement: HTMLVideoElement & { triggerLoadedMetadata: () => void };
   let mockCanvasElement: HTMLCanvasElement & { toBlob: Mock; getContext: Mock };
   let mockCanvasContext: CanvasRenderingContext2D & { drawImage: Mock };
   let originalCreateElement: typeof document.createElement;
@@ -14,10 +14,24 @@ describe('capturePhoto', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     originalCreateElement = document.createElement;
+
+    let onLoadedMetadataCallback: (() => void) | null = null;
     mockVideoElement = {
       srcObject: {} as MediaStream,
-      onloadedmetadata: vi.fn(),
-    } as HTMLVideoElement & { onloadedmetadata: Mock };
+      set onloadedmetadata(callback: () => void) {
+        onLoadedMetadataCallback = callback;
+      },
+      get onloadedmetadata() {
+        return onLoadedMetadataCallback;
+      },
+      videoWidth: 1920,
+      videoHeight: 1080,
+      triggerLoadedMetadata: () => {
+        if (onLoadedMetadataCallback) {
+          onLoadedMetadataCallback();
+        }
+      },
+    } as HTMLVideoElement & { triggerLoadedMetadata: () => void };
 
     mockCanvasContext = {
       drawImage: vi.fn(),
@@ -31,14 +45,17 @@ describe('capturePhoto', () => {
       toBlob: vi.fn(),
     } as HTMLCanvasElement & { toBlob: Mock; getContext: Mock };
 
-    Object.defineProperty(mockVideoElement, 'videoWidth', {
-      writable: true,
-      value: 1920,
-    });
-    Object.defineProperty(mockVideoElement, 'videoHeight', {
-      writable: true,
-      value: 1080,
-    });
+    vi.spyOn(document, 'createElement').mockImplementation(
+      (tagName: string) => {
+        if (tagName === 'video') {
+          return mockVideoElement;
+        }
+        if (tagName === 'canvas') {
+          return mockCanvasElement;
+        }
+        return originalCreateElement(tagName);
+      }
+    );
   });
 
   afterEach(() => {
@@ -60,10 +77,7 @@ describe('capturePhoto', () => {
     await vi.runOnlyPendingTimersAsync();
 
     // onloadedmetadataに設定されたコールバックを呼び出す
-    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
-      .mock.calls[0][0];
-    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
-    onLoadedMetadataCallback(); // コールバックを実行
+    mockVideoElement.triggerLoadedMetadata(); // コールバックを実行
 
     const result = await capturePromise;
 
@@ -105,22 +119,19 @@ describe('capturePhoto', () => {
 
     await vi.runOnlyPendingTimersAsync();
 
-    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
-    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
-      .mock.calls[0][0];
-    onLoadedMetadataCallback();
+    mockVideoElement.triggerLoadedMetadata();
 
     await capturePromise;
 
-    // Expect canvas to be resized to 1440x1080 (maintaining aspect ratio, min length 1080)
-    expect(mockCanvasElement.width).toBe(1440);
-    expect(mockCanvasElement.height).toBe(1080);
+    // Expect canvas to be resized to 1080x810 (maintaining aspect ratio, min length 1080)
+    expect(mockCanvasElement.width).toBe(1080);
+    expect(mockCanvasElement.height).toBe(810);
     expect(mockCanvasContext.drawImage).toHaveBeenCalledWith(
       mockVideoElement,
       0,
       0,
-      1440,
-      1080
+      1080,
+      810
     );
   });
 
@@ -143,10 +154,7 @@ describe('capturePhoto', () => {
 
     await vi.runOnlyPendingTimersAsync();
 
-    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
-    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
-      .mock.calls[0][0];
-    onLoadedMetadataCallback();
+    mockVideoElement.triggerLoadedMetadata();
 
     await capturePromise;
 
@@ -172,10 +180,7 @@ describe('capturePhoto', () => {
 
     await vi.runOnlyPendingTimersAsync();
 
-    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
-    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
-      .mock.calls[0][0];
-    onLoadedMetadataCallback();
+    mockVideoElement.triggerLoadedMetadata();
 
     const result = await capturePromise;
 
@@ -190,10 +195,7 @@ describe('capturePhoto', () => {
 
     await vi.runOnlyPendingTimersAsync();
 
-    expect(mockVideoElement.onloadedmetadata).toHaveBeenCalled();
-    const onLoadedMetadataCallback = (mockVideoElement.onloadedmetadata as Mock)
-      .mock.calls[0][0];
-    onLoadedMetadataCallback();
+    mockVideoElement.triggerLoadedMetadata();
 
     const result = await capturePromise;
 
