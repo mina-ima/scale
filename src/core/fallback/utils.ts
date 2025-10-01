@@ -62,6 +62,11 @@ interface MeasurableElement {
   videoHeight?: number;
 }
 
+interface Point {
+  x: number;
+  y: number;
+}
+
 export const getTapCoordinates = (
   event: MouseEvent,
   element: MeasurableElement
@@ -77,4 +82,11 @@ export const getTapCoordinates = (
   const y = (event.clientY - rect.top) * scaleY;
 
   return { x, y };
+};
+
+export const prepareProjectiveTransformation = (points: Point[]): Point[] => {
+  if (points.length !== 4) {
+    throw new Error('Projective transformation requires exactly 4 points.');
+  }
+  return points;
 };

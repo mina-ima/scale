@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
-import { capturePhoto, getTapCoordinates } from './utils';
+import {
+  capturePhoto,
+  getTapCoordinates,
+  prepareProjectiveTransformation,
+} from './utils';
 
 describe('capturePhoto', () => {
   let mockVideoElement: HTMLVideoElement & { onloadedmetadata: Mock };
@@ -218,5 +222,41 @@ describe('getTapCoordinates', () => {
     const result = getTapCoordinates(mockEvent, mockElement);
 
     expect(result).toEqual({ x: 100, y: 50 });
+  });
+});
+
+describe('prepareProjectiveTransformation', () => {
+  it('should return the points if exactly 4 points are provided', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ];
+    expect(prepareProjectiveTransformation(points)).toEqual(points);
+  });
+
+  it('should throw an error if less than 4 points are provided', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+    ];
+    expect(() => prepareProjectiveTransformation(points)).toThrow(
+      'Projective transformation requires exactly 4 points.'
+    );
+  });
+
+  it('should throw an error if more than 4 points are provided', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+      { x: 0.5, y: 0.5 },
+    ];
+    expect(() => prepareProjectiveTransformation(points)).toThrow(
+      'Projective transformation requires exactly 4 points.'
+    );
   });
 });
