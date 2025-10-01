@@ -27,9 +27,8 @@ describe('App Routing', () => {
       </MemoryRouter>
     );
     expect(screen.getByText('計測モード')).toBeInTheDocument();
-    expect(
-      screen.getByText('計測モードのコンテンツがここに表示されます。')
-    ).toBeInTheDocument();
+    // Check for a unique element on the MeasurePage instead of the placeholder text
+    expect(screen.getByTestId('measure-page-container')).toBeInTheDocument();
   });
 
   it('renders GrowthRecordPage on /growth-record route', () => {

@@ -24,6 +24,15 @@ declare interface ScaleEstimation {
   confidence: number; // 0..1
 }
 
+declare interface MeasurementResult {
+  mode: MeasureMode;
+  valueMm?: number; // For all measurements except weight
+  valueKg?: number; // For weight only
+  unit: 'mm' | 'cm' | 'm' | 'kg';
+  dateISO: string; // YYYY-MM-DD
+  image?: Blob; // Composite image for growth records only
+}
+
 declare interface ErrorState {
   code:
     | 'CAMERA_DENIED'
