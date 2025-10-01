@@ -150,6 +150,12 @@ const MeasurePage: React.FC = () => {
             <span className="ml-2">m</span>
           </label>
         </div>
+        <button
+          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          onClick={clearPoints}
+        >
+          リセット
+        </button>
       </div>
     </div>
   );
