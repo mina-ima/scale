@@ -72,3 +72,19 @@ export const shouldConfirmScaleEstimation = (
   // Placeholder implementation
   return result.confidence < threshold;
 };
+
+export const getScaleEstimationHint = (
+  result: ScaleEstimationResult,
+  needsConfirmation: boolean
+): string => {
+  if (needsConfirmation) {
+    if (result.matchedReferenceObject === null) {
+      return '基準物が検出されませんでした。A4用紙やクレジットカードなどを画面内に収めてください。';
+    } else {
+      return `「${result.matchedReferenceObject.name}」が検出されましたが、精度が低い可能性があります。再撮影しますか？`;
+    }
+  } else if (result.mmPerPx === 0) {
+    return 'スケールを推定できませんでした。基準物を画面内に収めてください。';
+  }
+  return ''; // No hint needed if confident and valid
+};
