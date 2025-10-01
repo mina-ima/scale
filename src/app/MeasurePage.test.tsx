@@ -1,3 +1,4 @@
+/// <reference types="vitest/globals" />
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MeasurePage from './MeasurePage';
@@ -35,7 +36,6 @@ describe('MeasurePage', () => {
     const canvas = screen.getByTestId('measure-canvas');
 
     fireEvent.click(canvas, { clientX: 100, clientY: 100 });
-    expect(screen.queryByText(/cm/)).not.toBeInTheDocument();
 
     fireEvent.click(canvas, { clientX: 200, clientY: 200 });
 
@@ -66,5 +66,37 @@ describe('MeasurePage', () => {
 
     expect(useMeasureStore.getState().points.length).toBe(1);
     expect(screen.queryByText('123.5 cm')).not.toBeInTheDocument();
+  });
+
+  it('should display unit selection and default to cm', () => {
+    render(<MeasurePage />);
+    expect(screen.getByLabelText('cm')).toBeInTheDocument();
+    expect(screen.getByLabelText('m')).toBeInTheDocument();
+    expect(screen.getByLabelText('cm')).toBeChecked();
+    expect(screen.getByLabelText('m')).not.toBeChecked();
+  });
+
+  it('should change the displayed measurement unit when unit selection changes', () => {
+    useMeasureStore.getState().setScale({
+      source: 'a4',
+      mmPerPx: 0.5,
+      confidence: 1,
+    });
+
+    render(<MeasurePage />);
+    const canvas = screen.getByTestId('measure-canvas');
+
+    fireEvent.click(canvas, { clientX: 100, clientY: 100 });
+    fireEvent.click(canvas, { clientX: 200, clientY: 200 });
+
+    expect(screen.getByText('123.5 cm')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('m'));
+    expect(screen.getByText('1.2 m')).toBeInTheDocument();
+    expect(screen.queryByText('123.5 cm')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('cm'));
+    expect(screen.getByText('123.5 cm')).toBeInTheDocument();
+    expect(screen.queryByText('1.2 m')).not.toBeInTheDocument();
   });
 });

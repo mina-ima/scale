@@ -20,6 +20,8 @@ const MeasurePage: React.FC = () => {
     clearPoints,
     setMeasurement,
     measureMode,
+    unit,
+    setUnit,
   } = useMeasureStore();
 
   const handleCanvasClick = useCallback(
@@ -64,12 +66,12 @@ const MeasurePage: React.FC = () => {
       const newMeasurement: MeasurementResult = {
         mode: measureMode,
         valueMm: distanceMm,
-        unit: 'cm', // Default to cm
+        unit: unit, // Use the unit from the store
         dateISO: new Date().toISOString(),
       };
       setMeasurement(newMeasurement);
     }
-  }, [points, scale, setMeasurement, measureMode]);
+  }, [points, scale, setMeasurement, measureMode, unit]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -88,14 +90,14 @@ const MeasurePage: React.FC = () => {
     }
 
     if (measurement?.valueMm && points.length === 2) {
-      const formatted = formatMeasurement(measurement.valueMm, 'cm');
+      const formatted = formatMeasurement(measurement.valueMm, unit);
       const midPoint = {
         x: (points[0].x + points[1].x) / 2,
         y: (points[0].y + points[1].y) / 2,
       };
       drawMeasurementLabel(context, formatted, midPoint.x, midPoint.y);
     }
-  }, [points, measurement]);
+  }, [points, measurement, unit]);
 
   return (
     <div
@@ -121,9 +123,33 @@ const MeasurePage: React.FC = () => {
         <h1 className="text-xl font-bold">計測モード</h1>
         {measurement?.valueMm && (
           <p className="text-lg">
-            {formatMeasurement(measurement.valueMm, 'cm')}
+            {formatMeasurement(measurement.valueMm, unit)}
           </p>
         )}
+        <div className="flex space-x-2 mt-2">
+          <label className="inline-flex items-center">
+            <input
+              type="radio"
+              className="form-radio"
+              name="unit"
+              value="cm"
+              checked={unit === 'cm'}
+              onChange={() => setUnit('cm')}
+            />
+            <span className="ml-2">cm</span>
+          </label>
+          <label className="inline-flex items-center">
+            <input
+              type="radio"
+              className="form-radio"
+              name="unit"
+              value="m"
+              checked={unit === 'm'}
+              onChange={() => setUnit('m')}
+            />
+            <span className="ml-2">m</span>
+          </label>
+        </div>
       </div>
     </div>
   );

@@ -7,12 +7,14 @@ interface MeasureState {
   error: ErrorState | null;
   points: Point[];
   measurement: MeasurementResult | null;
+  unit: 'cm' | 'm';
   setMeasureMode: (mode: MeasureMode) => void;
   setScale: (scale: ScaleEstimation | null) => void;
   setError: (error: ErrorState | null) => void;
   addPoint: (point: Point) => void;
   clearPoints: () => void;
   setMeasurement: (measurement: MeasurementResult | null) => void;
+  setUnit: (unit: 'cm' | 'm') => void;
 }
 
 export const useMeasureStore = create<MeasureState>((set) => ({
@@ -21,10 +23,12 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   error: null,
   points: [],
   measurement: null,
+  unit: 'cm',
   setMeasureMode: (mode) => set({ measureMode: mode }),
   setScale: (scale) => set({ scale }),
   setError: (error) => set({ error }),
   addPoint: (point) => set((state) => ({ points: [...state.points, point] })),
   clearPoints: () => set({ points: [], measurement: null }),
   setMeasurement: (measurement) => set({ measurement }),
+  setUnit: (unit) => set({ unit }),
 }));

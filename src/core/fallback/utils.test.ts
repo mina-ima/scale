@@ -6,7 +6,9 @@ import {
 } from './utils';
 
 describe('capturePhoto', () => {
-  let mockVideoElement: HTMLVideoElement & { triggerLoadedMetadata: () => void };
+  let mockVideoElement: HTMLVideoElement & {
+    triggerLoadedMetadata: () => void;
+  };
   let mockCanvasElement: HTMLCanvasElement & { toBlob: Mock; getContext: Mock };
   let mockCanvasContext: CanvasRenderingContext2D & { drawImage: Mock };
   let originalCreateElement: typeof document.createElement;
@@ -18,7 +20,7 @@ describe('capturePhoto', () => {
     let onLoadedMetadataCallback: (() => void) | null = null;
     mockVideoElement = {
       srcObject: {} as MediaStream,
-      set onloadedmetadata(callback: () => void) {
+      set onloadedmetadata(callback: (() => void) | null) {
         onLoadedMetadataCallback = callback;
       },
       get onloadedmetadata() {
@@ -31,7 +33,9 @@ describe('capturePhoto', () => {
           onLoadedMetadataCallback();
         }
       },
-    } as HTMLVideoElement & { triggerLoadedMetadata: () => void };
+    } as Partial<HTMLVideoElement> as HTMLVideoElement & {
+      triggerLoadedMetadata: () => void;
+    };
 
     mockCanvasContext = {
       drawImage: vi.fn(),
