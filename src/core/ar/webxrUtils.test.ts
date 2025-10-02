@@ -1,4 +1,4 @@
-import { isWebXRAvailable, startXrSession } from './webxrUtils';
+import { isWebXRAvailable, startXrSession, initHitTestSource } from './webxrUtils';
 
 describe('isWebXRAvailable', () => {
   it('should return true if WebXR is available', async () => {
@@ -63,5 +63,36 @@ describe('startXrSession', () => {
 
     const session = await startXrSession();
     expect(session).toBeNull();
+  });
+});
+
+describe('initHitTestSource', () => {
+  it('should initialize a hit test source and return it', async () => {
+    const mockHitTestSource = {};
+    const mockReferenceSpace = {};
+    const mockXRSession = {
+      requestReferenceSpace: vi.fn(() => Promise.resolve(mockReferenceSpace)),
+      requestHitTestSource: vi.fn(() => Promise.resolve(mockHitTestSource)),
+    };
+
+    const hitTestSource = await initHitTestSource(mockXRSession as any);
+    expect(mockXRSession.requestReferenceSpace).toHaveBeenCalledWith('viewer');
+    expect(mockXRSession.requestHitTestSource).toHaveBeenCalledWith({ space: mockReferenceSpace });
+    expect(hitTestSource).toBe(mockHitTestSource);
+  });
+
+  it('should return null if reference space request fails', async () => {
+    const mockXRSession = { requestReferenceSpace: vi.fn(() => Promise.reject(new Error('Reference space failed'))) };
+
+    const hitTestSource = await initHitTestSource(mockXRSession as any);
+    expect(hitTestSource).toBeNull();
+  });
+
+  it('should return null if hit test source request fails', async () => {
+    const mockReferenceSpace = { requestHitTestSource: vi.fn(() => Promise.reject(new Error('Hit test source failed'))) };
+    const mockXRSession = { requestReferenceSpace: vi.fn(() => Promise.resolve(mockReferenceSpace)) };
+
+    const hitTestSource = await initHitTestSource(mockXRSession as any);
+    expect(hitTestSource).toBeNull();
   });
 });

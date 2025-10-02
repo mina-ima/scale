@@ -24,3 +24,14 @@ export async function startXrSession(): Promise<XRSession | null> {
     return null;
   }
 }
+
+export async function initHitTestSource(session: XRSession): Promise<XRHitTestSource | null> {
+  try {
+    const referenceSpace = await session.requestReferenceSpace('viewer');
+    const hitTestSource = await session.requestHitTestSource({ space: referenceSpace });
+    return hitTestSource;
+  } catch (error) {
+    console.error('Error initializing hit test source:', error);
+    return null;
+  }
+}
