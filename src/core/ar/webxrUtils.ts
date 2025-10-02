@@ -35,3 +35,19 @@ export async function initHitTestSource(session: XRSession): Promise<XRHitTestSo
     return null;
   }
 }
+
+export function get3dPointFromHitTest(
+  frame: XRFrame,
+  hitTestSource: XRHitTestSource,
+  referenceSpace: XRReferenceSpace
+): { x: number; y: number; z: number } | null {
+  const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+  if (hitTestResults.length > 0) {
+    const pose = hitTestResults[0].getPose(referenceSpace);
+    if (pose) {
+      return { x: pose.transform.position.x, y: pose.transform.position.y, z: pose.transform.position.z };
+    }
+  }
+  return null;
+}

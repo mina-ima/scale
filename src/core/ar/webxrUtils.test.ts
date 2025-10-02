@@ -1,4 +1,4 @@
-import { isWebXRAvailable, startXrSession, initHitTestSource } from './webxrUtils';
+import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest } from './webxrUtils';
 
 describe('isWebXRAvailable', () => {
   it('should return true if WebXR is available', async () => {
@@ -90,9 +90,47 @@ describe('initHitTestSource', () => {
 
   it('should return null if hit test source request fails', async () => {
     const mockReferenceSpace = { requestHitTestSource: vi.fn(() => Promise.reject(new Error('Hit test source failed'))) };
-    const mockXRSession = { requestReferenceSpace: vi.fn(() => Promise.resolve(mockReferenceSpace)) };
+    const mockXRSession = {
+      requestReferenceSpace: vi.fn(() => Promise.resolve(mockReferenceSpace)),
+      requestHitTestSource: vi.fn(() => Promise.reject(new Error('Hit test source failed'))),
+    };
 
     const hitTestSource = await initHitTestSource(mockXRSession as any);
+    expect(mockXRSession.requestHitTestSource).toHaveBeenCalled();
     expect(hitTestSource).toBeNull();
+  });
+});
+
+describe('get3dPointFromHitTest', () => {
+  it('should return a 3D point from a hit test result', () => {
+    const mockPose = { transform: { position: { x: 1, y: 2, z: 3 } } };
+    const mockHitTestResult = { getPose: vi.fn(() => mockPose) };
+    const mockFrame = { getHitTestResults: vi.fn(() => [mockHitTestResult]) };
+    const mockHitTestSource = {};
+    const mockReferenceSpace = {};
+
+    const point = get3dPointFromHitTest(mockFrame as any, mockHitTestSource as any, mockReferenceSpace as any);
+    expect(mockFrame.getHitTestResults).toHaveBeenCalledWith(mockHitTestSource);
+    expect(mockHitTestResult.getPose).toHaveBeenCalledWith(mockReferenceSpace);
+    expect(point).toEqual({ x: 1, y: 2, z: 3 });
+  });
+
+  it('should return null if no hit test results are found', () => {
+    const mockFrame = { getHitTestResults: vi.fn(() => []) };
+    const mockHitTestSource = {};
+    const mockReferenceSpace = {};
+
+    const point = get3dPointFromHitTest(mockFrame as any, mockHitTestSource as any, mockReferenceSpace as any);
+    expect(point).toBeNull();
+  });
+
+  it('should return null if the hit test result has no pose', () => {
+    const mockHitTestResult = { getPose: vi.fn(() => null) };
+    const mockFrame = { getHitTestResults: vi.fn(() => [mockHitTestResult]) };
+    const mockHitTestSource = {};
+    const mockReferenceSpace = {};
+
+    const point = get3dPointFromHitTest(mockFrame as any, mockHitTestSource as any, mockReferenceSpace as any);
+    expect(point).toBeNull();
   });
 });
