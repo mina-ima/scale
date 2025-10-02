@@ -1,4 +1,4 @@
-import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest, detectPlane, stabilizePoint } from './webxrUtils';
+import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest, detectPlane, stabilizePoint, handleWebXRFallback } from './webxrUtils';
 
 describe('isWebXRAvailable', () => {
   it('should return true if WebXR is available', async () => {
@@ -202,5 +202,38 @@ describe('stabilizePoint', () => {
 
     // (1 + 30 + 40) / 3 = 23.66...
     expect(stabilizePoint(point, history, 3)).toEqual({ x: 23.666666666666668, y: 24, z: 24.333333333333332 });
+  });
+});
+
+describe('handleWebXRFallback', () => {
+  it('should return true if WebXR is not available', async () => {
+    Object.defineProperty(navigator, 'xr', {
+      value: undefined,
+      configurable: true,
+    });
+    await expect(handleWebXRFallback()).resolves.toBe(true);
+  });
+
+  it('should return true if WebXR session request fails', async () => {
+    Object.defineProperty(navigator, 'xr', {
+      value: {
+        isSessionSupported: async () => Promise.resolve(true),
+        requestSession: vi.fn(() => Promise.reject(new Error('Session failed'))),
+      },
+      configurable: true,
+    });
+    await expect(handleWebXRFallback()).resolves.toBe(true);
+  });
+
+  it('should return false if WebXR session starts successfully', async () => {
+    const mockXRSession = { end: vi.fn() };
+    Object.defineProperty(navigator, 'xr', {
+      value: {
+        isSessionSupported: async () => Promise.resolve(true),
+        requestSession: vi.fn(() => Promise.resolve(mockXRSession)),
+      },
+      configurable: true,
+    });
+    await expect(handleWebXRFallback()).resolves.toBe(false);
   });
 });

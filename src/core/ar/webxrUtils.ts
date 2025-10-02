@@ -83,3 +83,23 @@ export function stabilizePoint(currentPoint: Point3D, history: Point3D[], histor
     z: sum.z / newHistory.length,
   };
 }
+
+export async function handleWebXRFallback(): Promise<boolean> {
+  if (!await isWebXRAvailable()) {
+    console.warn('WebXR not available, falling back to 2D measurement.');
+    return true;
+  }
+
+  try {
+    const session = await startXrSession();
+    if (!session) {
+      console.warn('WebXR session failed to start, falling back to 2D measurement.');
+      return true;
+    }
+    // If session starts successfully, it means WebXR is working, so no fallback needed
+    return false;
+  } catch (error) {
+    console.error('Error during WebXR session setup, falling back to 2D measurement:', error);
+    return true;
+  }
+}
