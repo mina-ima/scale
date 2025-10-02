@@ -96,7 +96,7 @@
 - [x] 平面未検出 → ガイド表示/露出ヒント (`getPlaneDetectionMessage`)。
 - [x] 保存失敗 → 画像品質/解像度を下げて再試行 (`saveImageWithRetry`)。
 - [x] 基準物検出失敗 → ヒント/再撮影導線 (`getReferenceObjectDetectionMessage`)。
-- [ ] 例外は ErrorBoundary + 各 core で捕捉、ユーザーへはダイアログ/トースト。
+- [x] 例外は ErrorBoundary + 各 core で捕捉、ユーザーへはダイアログ/トースト (`ErrorBoundary`)。
 
 ## 12. アクセシビリティ/UX（P1）
 
