@@ -27,6 +27,7 @@
 -   平面検出機能 (`detectPlane`) を実装済み。
 -   座標安定化機能 (`stabilizePoint`) を実装済み。
 -   WebXR非対応/失敗時のフォールバック自動切替機能 (`handleWebXRFallback`) を実装済み。
+-   基準物検出失敗時のヒント/再撮影導線機能 (`getReferenceObjectDetectionMessage`) を実装済み。
 -   平面未検出時のガイド表示機能 (`getPlaneDetectionMessage`) を実装済み。
 -   ユーザーはデバイスのカメラを通して現実空間を認識し、ARで仮想的な測定ツールを配置できます。
 -   2点間の距離をリアルタイムで測定し、画面上に表示します。
