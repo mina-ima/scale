@@ -1,4 +1,4 @@
-import { isWebXRAvailable } from './webxrUtils';
+import { isWebXRAvailable, startXrSession } from './webxrUtils';
 
 describe('isWebXRAvailable', () => {
   it('should return true if WebXR is available', async () => {
@@ -33,5 +33,35 @@ describe('isWebXRAvailable', () => {
     });
 
     await expect(isWebXRAvailable()).resolves.toBe(false);
+  });
+});
+
+describe('startXrSession', () => {
+  it('should start an immersive-ar session and return an XR session object', async () => {
+    const mockXRSession = { end: vi.fn() };
+    const mockXRSystem = {
+      requestSession: vi.fn(() => Promise.resolve(mockXRSession)),
+    };
+    Object.defineProperty(navigator, 'xr', {
+      value: mockXRSystem,
+      configurable: true,
+    });
+
+    const session = await startXrSession();
+    expect(mockXRSystem.requestSession).toHaveBeenCalledWith('immersive-ar', { optionalFeatures: ['dom-overlay', 'hit-test'] });
+    expect(session).toBe(mockXRSession);
+  });
+
+  it('should return null if session request fails', async () => {
+    const mockXRSystem = {
+      requestSession: vi.fn(() => Promise.reject(new Error('Session failed'))),
+    };
+    Object.defineProperty(navigator, 'xr', {
+      value: mockXRSystem,
+      configurable: true,
+    });
+
+    const session = await startXrSession();
+    expect(session).toBeNull();
   });
 });
