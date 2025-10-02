@@ -93,7 +93,7 @@
 - [x] エラー型 `ErrorState` 実装（code/message）。
 - [x] カメラ拒否 → 再試行導線/設定案内。
 - [x] WebXR 非対応/失敗 → フォールバック自動切替 (`handleWebXRFallback`)。
-- [ ] 平面未検出 → ガイド表示/露出ヒント。
+- [x] 平面未検出 → ガイド表示/露出ヒント (`getPlaneDetectionMessage`)。
 - [ ] 保存失敗 → 画像品質/解像度を下げて再試行。
 - [ ] 基準物検出失敗 → ヒント/再撮影導線。
 - [ ] 例外は ErrorBoundary + 各 core で捕捉、ユーザーへはダイアログ/トースト。

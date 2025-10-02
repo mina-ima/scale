@@ -103,3 +103,10 @@ export async function handleWebXRFallback(): Promise<boolean> {
     return true;
   }
 }
+
+export function getPlaneDetectionMessage(frame: XRFrame): string | null {
+  if (detectPlane(frame)) {
+    return null;
+  }
+  return '床や壁を映してください';
+}

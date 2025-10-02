@@ -1,4 +1,4 @@
-import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest, detectPlane, stabilizePoint, handleWebXRFallback } from './webxrUtils';
+import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest, detectPlane, stabilizePoint, handleWebXRFallback, getPlaneDetectionMessage } from './webxrUtils';
 
 describe('isWebXRAvailable', () => {
   it('should return true if WebXR is available', async () => {
@@ -235,5 +235,17 @@ describe('handleWebXRFallback', () => {
       configurable: true,
     });
     await expect(handleWebXRFallback()).resolves.toBe(false);
+  });
+});
+
+describe('getPlaneDetectionMessage', () => {
+  it('should return null if a plane is detected', () => {
+    const mockFrame = { detectedPlanes: { [Symbol.iterator]: () => ({ next: () => ({ done: false, value: {} }) }) } };
+    expect(getPlaneDetectionMessage(mockFrame as any)).toBeNull();
+  });
+
+  it('should return a message if no plane is detected', () => {
+    const mockFrame = { detectedPlanes: { [Symbol.iterator]: () => ({ next: () => ({ done: true }) }) } };
+    expect(getPlaneDetectionMessage(mockFrame as any)).toBe('床や壁を映してください');
   });
 });
