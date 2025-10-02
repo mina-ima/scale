@@ -64,3 +64,22 @@ export function detectPlane(frame: XRFrame): boolean {
   }
   return false;
 }
+
+interface Point3D { x: number; y: number; z: number; }
+
+export function stabilizePoint(currentPoint: Point3D, history: Point3D[], historySize: number = 5): Point3D {
+  const newHistory = [...history, currentPoint].slice(-historySize);
+
+  const sum = newHistory.reduce((acc, point) => {
+    acc.x += point.x;
+    acc.y += point.y;
+    acc.z += point.z;
+    return acc;
+  }, { x: 0, y: 0, z: 0 });
+
+  return {
+    x: sum.x / newHistory.length,
+    y: sum.y / newHistory.length,
+    z: sum.z / newHistory.length,
+  };
+}

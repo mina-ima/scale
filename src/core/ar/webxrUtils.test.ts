@@ -1,4 +1,4 @@
-import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest, detectPlane } from './webxrUtils';
+import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest, detectPlane, stabilizePoint } from './webxrUtils';
 
 describe('isWebXRAvailable', () => {
   it('should return true if WebXR is available', async () => {
@@ -161,5 +161,46 @@ describe('detectPlane', () => {
 
     const planeDetected = detectPlane(mockFrame as any);
     expect(planeDetected).toBe(false);
+  });
+});
+
+describe('stabilizePoint', () => {
+  it('should return the same point if the history is empty or has only one point', () => {
+    const point = { x: 1, y: 2, z: 3 };
+    expect(stabilizePoint(point, [])).toEqual(point);
+    // (1 + 10) / 2 = 5.5
+    // (2 + 20) / 2 = 11
+    // (3 + 30) / 2 = 16.5
+    expect(stabilizePoint(point, [{ x: 10, y: 20, z: 30 }])).toEqual({ x: 5.5, y: 11, z: 16.5 });
+  });
+
+  it('should return the average of the current point and history points', () => {
+    const point = { x: 1, y: 2, z: 3 };
+    const history = [
+      { x: 0, y: 0, z: 0 },
+      { x: 2, y: 4, z: 6 },
+    ];
+    // (1 + 0 + 2) / 3 = 1
+    // (2 + 0 + 4) / 3 = 2
+    // (3 + 0 + 6) / 3 = 3
+    expect(stabilizePoint(point, history)).toEqual({ x: 1, y: 2, z: 3 });
+  });
+
+  it('should limit the history size', () => {
+    const point = { x: 1, y: 2, z: 3 };
+    const history = [
+      { x: 0, y: 0, z: 0 },
+      { x: 10, y: 10, z: 10 },
+      { x: 20, y: 20, z: 20 },
+      { x: 30, y: 30, z: 30 },
+      { x: 40, y: 40, z: 40 },
+    ]; // size 5
+    // (1 + 10 + 20 + 30 + 40) / 5 = 20.2
+    // (2 + 10 + 20 + 30 + 40) / 5 = 20.4
+    // (3 + 10 + 20 + 30 + 40) / 5 = 20.6
+    expect(stabilizePoint(point, history, 5)).toEqual({ x: 20.2, y: 20.4, z: 20.6 });
+
+    // (1 + 30 + 40) / 3 = 23.66...
+    expect(stabilizePoint(point, history, 3)).toEqual({ x: 23.666666666666668, y: 24, z: 24.333333333333332 });
   });
 });
