@@ -1,4 +1,4 @@
-import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest } from './webxrUtils';
+import { isWebXRAvailable, startXrSession, initHitTestSource, get3dPointFromHitTest, detectPlane } from './webxrUtils';
 
 describe('isWebXRAvailable', () => {
   it('should return true if WebXR is available', async () => {
@@ -132,5 +132,34 @@ describe('get3dPointFromHitTest', () => {
 
     const point = get3dPointFromHitTest(mockFrame as any, mockHitTestSource as any, mockReferenceSpace as any);
     expect(point).toBeNull();
+  });
+});
+
+describe('detectPlane', () => {
+  it('should return true if a plane is detected', () => {
+    const mockPlane = {};
+    const mockDetectedPlanes = {
+      [Symbol.iterator]: vi.fn(() => ({
+        next: vi.fn()
+          .mockReturnValueOnce({ done: false, value: mockPlane })
+          .mockReturnValueOnce({ done: true }),
+      })),
+    };
+    const mockFrame = { detectedPlanes: mockDetectedPlanes };
+
+    const planeDetected = detectPlane(mockFrame as any);
+    expect(planeDetected).toBe(true);
+  });
+
+  it('should return false if no plane is detected', () => {
+    const mockDetectedPlanes = {
+      [Symbol.iterator]: vi.fn(() => ({
+        next: vi.fn().mockReturnValueOnce({ done: true }),
+      })),
+    };
+    const mockFrame = { detectedPlanes: mockDetectedPlanes };
+
+    const planeDetected = detectPlane(mockFrame as any);
+    expect(planeDetected).toBe(false);
   });
 });

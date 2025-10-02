@@ -41,7 +41,7 @@
 
 - [x] WebXR セッション開始/終了 (`startXrSession`)、ヒットテスト初期化 (`initHitTestSource`)。
 - [x] レイキャストによる 3D 点取得（`get3dPointFromHitTest`）。
-- [x] 平面未検出時のガイド表示（「床や壁を映してください」）。
+- [x] 平面未検出時のガイド表示（`detectPlane`）。
 - [x] ノイズ対策（中央値/移動平均）で座標安定化。
 
 ## 5. core/fallback（P0）

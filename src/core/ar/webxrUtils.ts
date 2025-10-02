@@ -51,3 +51,16 @@ export function get3dPointFromHitTest(
   }
   return null;
 }
+
+export function detectPlane(frame: XRFrame): boolean {
+  if (!frame.detectedPlanes) {
+    return false;
+  }
+  const planes = frame.detectedPlanes;
+  for (const plane of planes) {
+    if (plane) {
+      return true;
+    }
+  }
+  return false;
+}
