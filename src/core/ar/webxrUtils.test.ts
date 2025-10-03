@@ -1,21 +1,8 @@
 import { vi } from 'vitest';
-import * as webxrUtils from './webxrUtils';
-
-// Mock dependencies before importing the module under test
-vi.doMock('./webxrUtils', async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof webxrUtils;
-  return {
-    ...actual,
-    get3dPointFromHitTest: (await vi.importActual('./webxrUtils'))
-      .get3dPointFromHitTest,
-  };
-});
 
 vi.mock('../../core/measure/calculate3dDistance', () => ({
   calculate3dDistance: vi.fn(),
 }));
-
-
 
 import {
   isWebXRAvailable,
@@ -27,6 +14,7 @@ import {
   handleWebXRFallback,
   getPlaneDetectionMessage,
   performARMeasurement,
+  arHelpers,
 } from './webxrUtils';
 import { calculate3dDistance } from '../../core/measure/calculate3dDistance';
 
@@ -179,14 +167,19 @@ describe('webxrUtils', () => {
     });
 
     it('should return null if no hit test results are found', () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const mockHitTestResult = {
-        getPose: vi.fn(() => null),
-      } as unknown as XRHitTestResult; // Define mockHitTestResult here
+      const mockHitTestSource = {} as unknown as XRHitTestSource;
+      const mockReferenceSpace = {} as unknown as XRReferenceSpace;
+      const mockFrame = {
+        getHitTestResults: vi.fn(() => []),
+      } as unknown as XRFrame;
+
       const point = get3dPointFromHitTest(
         mockFrame,
-        mockHitTestSource as XRHitTestSource,
-        mockReferenceSpace as XRReferenceSpace
+        mockHitTestSource,
+        mockReferenceSpace
+      );
+      expect(mockFrame.getHitTestResults).toHaveBeenCalledWith(
+        mockHitTestSource
       );
       expect(point).toBeNull();
     });
@@ -394,7 +387,7 @@ describe('webxrUtils', () => {
 
       // Mock get3dPointFromHitTest to return our predefined points
       const get3dPointFromHitTestSpy = vi.spyOn(
-        webxrUtils,
+        arHelpers,
         'get3dPointFromHitTest'
       );
       get3dPointFromHitTestSpy.mockReturnValueOnce(mockPoint1);

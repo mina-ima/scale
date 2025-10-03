@@ -59,7 +59,7 @@ const MeasurePage: React.FC = () => {
       setCameraError(streamResult);
       return null;
     }
-  }, [videoRef]);
+  }, []);
 
   // Initialize WebXR or Fallback Camera
   useEffect(() => {
@@ -92,7 +92,7 @@ const MeasurePage: React.FC = () => {
       xrSession?.end();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once
+  }, [setupCamera]); // Run only once
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -300,6 +300,7 @@ const MeasurePage: React.FC = () => {
     >
       <video
         ref={videoRef}
+        data-testid="measure-video"
         className="absolute top-0 left-0 w-full h-full object-cover hidden"
         autoPlay
         muted

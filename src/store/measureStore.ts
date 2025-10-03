@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Point } from '../core/fallback/utils';
 
-interface MeasureState {
+export interface MeasureState {
   measureMode: MeasureMode;
   scale: ScaleEstimation | null;
   error: ErrorState | null;

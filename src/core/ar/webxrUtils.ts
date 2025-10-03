@@ -52,24 +52,34 @@ export async function initHitTestSource(
   }
 }
 
+export const arHelpers = {
+  get3dPointFromHitTest: (
+    frame: XRFrame,
+    hitTestSource: XRHitTestSource,
+    referenceSpace: XRReferenceSpace
+  ): { x: number; y: number; z: number } | null => {
+    const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+    if (hitTestResults.length > 0) {
+      const pose = hitTestResults[0].getPose(referenceSpace);
+      if (pose) {
+        return {
+          x: pose.transform.position.x,
+          y: pose.transform.position.y,
+          z: pose.transform.position.z,
+        };
+      }
+    }
+    return null;
+  },
+};
+
 export function get3dPointFromHitTest(
   frame: XRFrame,
   hitTestSource: XRHitTestSource,
   referenceSpace: XRReferenceSpace
 ): { x: number; y: number; z: number } | null {
-  const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-  if (hitTestResults.length > 0) {
-    const pose = hitTestResults[0].getPose(referenceSpace);
-    if (pose) {
-      return {
-        x: pose.transform.position.x,
-        y: pose.transform.position.y,
-        z: pose.transform.position.z,
-      };
-    }
-  }
-  return null;
+  return arHelpers.get3dPointFromHitTest(frame, hitTestSource, referenceSpace);
 }
 
 export function detectPlane(frame: XRFrame): boolean {
@@ -152,7 +162,11 @@ export async function performARMeasurement(
   hitTestSource: XRHitTestSource,
   referenceSpace: XRReferenceSpace
 ): Promise<number | null> {
-  const point1 = get3dPointFromHitTest(frame, hitTestSource, referenceSpace);
+  const point1 = arHelpers.get3dPointFromHitTest(
+    frame,
+    hitTestSource,
+    referenceSpace
+  );
   if (!point1) {
     return null;
   }
@@ -160,7 +174,11 @@ export async function performARMeasurement(
   // Simulate getting a second point after some user interaction
   // In a real scenario, this would involve waiting for another user input
   // For the test, we'll just call it again to get the second mocked point
-  const point2 = get3dPointFromHitTest(frame, hitTestSource, referenceSpace);
+  const point2 = arHelpers.get3dPointFromHitTest(
+    frame,
+    hitTestSource,
+    referenceSpace
+  );
   if (!point2) {
     return null;
   }

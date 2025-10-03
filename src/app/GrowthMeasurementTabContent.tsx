@@ -39,7 +39,7 @@ const GrowthMeasurementTabContent: React.FC<
     scale,
     addPoint,
     clearPoints,
-    setMeasurement, // eslint-disable-line @typescript-eslint/no-unused-vars
+    setMeasurement,
     unit,
     setUnit,
   } = useMeasureStore();
@@ -142,7 +142,17 @@ const GrowthMeasurementTabContent: React.FC<
       // In the test environment, the event is a simple object.
       const newPoint = getTapCoordinates(event.nativeEvent, canvas);
 
-      if (points.length >= 2) {
+      if (points.length === 1) {
+        addPoint(newPoint);
+        const distance = calculate2dDistance(points[0], newPoint, scale?.mmPerPx || 1);
+        setMeasurement({
+          mode: `growth-${mode}` as MeasureMode, // Add the mode property
+          valueMm: distance,
+          unit: unit, // Use the current unit from the store
+          dateISO: new Date().toISOString().split('T')[0],
+        });
+        return;
+      } else if (points.length >= 2) {
         clearPoints();
         addPoint(newPoint);
         return;
@@ -150,7 +160,7 @@ const GrowthMeasurementTabContent: React.FC<
 
       addPoint(newPoint);
     },
-    [addPoint, clearPoints, points.length, scale]
+    [addPoint, clearPoints, points.length, scale, setMeasurement, unit]
   );
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {

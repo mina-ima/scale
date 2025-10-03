@@ -11,6 +11,7 @@ import { useMeasureStore } from '../store/measureStore';
 import * as measure from '../core/measure/calculate2dDistance';
 import { type Mock, type MockInstance, vi } from 'vitest';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
+import * as cameraUtils from '../core/camera/utils';
 
 // Mock the render functions as they are not relevant to this test
 vi.mock('../core/render/drawMeasurement');
@@ -21,6 +22,15 @@ vi.stubGlobal('URL', {
   createObjectURL: vi.fn(() => 'blob:test/image'),
 });
 
+const { mockVideoTrack, mockMediaStream } = vi.hoisted(() => {
+  const mockVideoTrack = { stop: vi.fn() } as unknown as MediaStreamTrack;
+  const mockMediaStream = {
+    getTracks: () => [mockVideoTrack],
+  } as unknown as MediaStream;
+  return { mockVideoTrack, mockMediaStream };
+});
+
+// Mock camera utilities
 const originalState = useMeasureStore.getState();
 
 describe('MeasurePage', () => {
@@ -34,10 +44,15 @@ describe('MeasurePage', () => {
     spy = vi.spyOn(measure, 'calculate2dDistance');
     spy.mockReturnValue(1234.5); // e.g., 123.45 cm
     mockIsWebXRAvailable.mockResolvedValue(false); // Default mock
+
+    // Add spies for cameraUtils
+    vi.spyOn(cameraUtils, 'getCameraStream').mockResolvedValue(mockMediaStream);
+    vi.spyOn(cameraUtils, 'stopCameraStream').mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.runOnlyPendingTimersAsync();
   });
 
   it('should calculate and display distance after two taps', () => {
@@ -262,5 +277,44 @@ describe('MeasurePage', () => {
     );
 
     imageSpy.mockRestore();
+  });
+
+  it('should start camera and render video stream on canvas when WebXR is not supported', async () => {
+    mockIsWebXRAvailable.mockResolvedValue(false);
+
+    // Mock canvas context
+    const mockContext: Partial<CanvasRenderingContext2D> = {
+      drawImage: vi.fn(),
+      clearRect: vi.fn(),
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      mockContext as CanvasRenderingContext2D
+    );
+
+    render(<MeasurePage />);
+
+    // Wait for camera setup and rendering
+    await waitFor(() => {
+      expect(vi.mocked(cameraUtils.getCameraStream)).toHaveBeenCalled();
+    });
+
+    // Simulate video readyState
+    const videoElement = screen.getByTestId('measure-page-container').querySelector('video');
+    if (videoElement) {
+      Object.defineProperty(videoElement, 'readyState', { value: 4 });
+    }
+
+    // Advance timers to allow renderLoop to execute
+    vi.advanceTimersByTime(100); // Advance by a small amount to allow renderLoop to run
+
+    await waitFor(() => {
+      expect(mockContext.drawImage).toHaveBeenCalledWith(
+        expect.any(HTMLVideoElement),
+        0,
+        0,
+        expect.any(Number),
+        expect.any(Number)
+      );
+    });
   });
 });
