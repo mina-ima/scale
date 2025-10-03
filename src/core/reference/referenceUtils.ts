@@ -1,4 +1,6 @@
-export function getReferenceObjectDetectionMessage(isDetected: boolean): string | null {
+export function getReferenceObjectDetectionMessage(
+  isDetected: boolean
+): string | null {
   if (isDetected) {
     return null;
   }

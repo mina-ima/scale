@@ -1,24 +1,29 @@
-/// <reference types="vitest/globals" />
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MeasurePage from './MeasurePage';
 import { useMeasureStore } from '../store/measureStore';
 import * as measure from '../core/measure/calculate2dDistance';
-import { vi } from 'vitest';
+import { Mock, mock, stubGlobal, fn, spyOn, useFakeTimers, restoreAllMocks, runOnlyPendingTimersAsync } from 'vitest';
 
 // Mock the render functions as they are not relevant to this test
-vi.mock('../core/render/drawMeasurement');
+mock('../core/render/drawMeasurement');
+
+// Mock URL.createObjectURL globally
+stubGlobal('URL', {
+  createObjectURL: fn(() => 'blob:test/image'),
+});
 
 const originalState = useMeasureStore.getState();
 
 describe('MeasurePage', () => {
-  let spy: vi.SpyInstance;
+  let spy: SpyInstance;
 
   beforeEach(() => {
     // Reset the store and mocks before each test
     useMeasureStore.setState(originalState);
     spy = vi.spyOn(measure, 'calculate2dDistance');
     spy.mockReturnValue(1234.5); // e.g., 123.45 cm
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
@@ -137,7 +142,9 @@ describe('MeasurePage', () => {
     });
     render(<MeasurePage />);
     expect(
-      screen.getByText('WebXR (AR) is not supported on this device.')
+      screen.getByText(
+        'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
+      )
     ).toBeInTheDocument();
   });
 
@@ -149,7 +156,101 @@ describe('MeasurePage', () => {
     });
     render(<MeasurePage />);
     expect(
-      screen.queryByText('WebXR (AR) is not supported on this device.')
+      screen.queryByText(
+        'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
+      )
     ).not.toBeInTheDocument();
+  });
+
+  it('should not display photo upload input if WebXR is supported (implying AR mode)', () => {
+    // Mock navigator.xr to be an object (simulating support)
+    Object.defineProperty(navigator, 'xr', {
+      writable: true,
+      value: {},
+    });
+    render(<MeasurePage />);
+    expect(screen.queryByLabelText('写真を選択')).not.toBeInTheDocument();
+  });
+
+  it('should display photo upload input if WebXR is not supported', () => {
+    // Mock navigator.xr to be undefined
+    Object.defineProperty(navigator, 'xr', {
+      writable: true,
+      value: undefined,
+    });
+    render(<MeasurePage />);
+    expect(screen.getByLabelText('写真を選択')).toBeInTheDocument();
+  });
+
+  it('should display the uploaded photo on the canvas', async () => {
+    const mockImage = new Image();
+    mockImage.src =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+    const mockContext: Partial<CanvasRenderingContext2D> = {
+      drawImage: vi.fn(),
+      clearRect: vi.fn(),
+    };
+
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      mockContext as CanvasRenderingContext2D
+    );
+
+    interface MockFileReader extends FileReader {
+      readAsDataURL: Mock;
+      onload:
+        | ((this: FileReader, ev: ProgressEvent<FileReader>) => void)
+        | null;
+      result: string;
+    }
+
+    const mockFileReader: MockFileReader = {
+      readAsDataURL: vi.fn(),
+      onload: null,
+      result: 'data:image/png;base64,mockedDataURL',
+      abort: vi.fn(),
+      error: null,
+      onabort: null,
+      onerror: null,
+      onloadend: null,
+      readyState: 0,
+      onprogress: null,
+      onloadstart: null,
+      EMPTY: 0,
+      LOADING: 1,
+      DONE: 2,
+      readAsArrayBuffer: vi.fn(),
+      readAsBinaryString: vi.fn(),
+      readAsText: vi.fn(),
+      dispatchEvent: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    vi.spyOn(window, 'FileReader').mockImplementation(() => mockFileReader);
+
+    render(<MeasurePage />);
+
+    const fileInput = screen.getByLabelText('写真を選択');
+    const file = new File(['(binary data)'], 'test.png', { type: 'image/png' });
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    expect(mockFileReader.readAsDataURL).toHaveBeenCalledWith(file);
+
+    // Manually trigger the onload event of the mocked FileReader
+    mockFileReader.onload!({
+      target: { result: mockFileReader.result },
+    } as ProgressEvent<FileReader>);
+
+    // Wait for the image to load and be drawn
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(mockContext.drawImage).toHaveBeenCalledWith(
+      expect.any(HTMLImageElement),
+      0,
+      0,
+      expect.any(Number),
+      expect.any(Number)
+    );
   });
 });

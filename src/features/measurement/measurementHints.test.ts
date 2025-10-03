@@ -7,7 +7,9 @@ describe('getMeasurementHint', () => {
   });
 
   it('should return a hint for reference object detection in fallback mode', () => {
-    const hint = getMeasurementHint('fallback', { referenceObjectDetected: false });
+    const hint = getMeasurementHint('fallback', {
+      referenceObjectDetected: false,
+    });
     expect(hint).toBe('A4や硬貨を一緒に映すと精度アップ！');
   });
 
@@ -20,7 +22,9 @@ describe('getMeasurementHint', () => {
     const hint = getMeasurementHint('measurement', { distance: 5 });
     expect(hint).toBeNull();
 
-    const hint2 = getMeasurementHint('fallback', { referenceObjectDetected: true });
+    const hint2 = getMeasurementHint('fallback', {
+      referenceObjectDetected: true,
+    });
     expect(hint2).toBeNull();
 
     const hint3 = getMeasurementHint('ar', { planeDetected: true });

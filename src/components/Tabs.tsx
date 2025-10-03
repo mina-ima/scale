@@ -58,13 +58,21 @@ const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onTabChange }) => {
               tabRefs.current[index] = el;
             }}
             tabIndex={index === activeTab ? 0 : -1}
+            aria-selected={index === activeTab}
+            aria-controls={`tabpanel-${index}`}
           >
             {tab.label}
           </a>
         ))}
       </div>
       {tabs.map((tab, index) => (
-        <div key={index} role="tabpanel" hidden={index !== activeTab}>
+        <div
+          key={index}
+          role="tabpanel"
+          hidden={index !== activeTab}
+          id={`tabpanel-${index}`}
+          aria-labelledby={`tab-${index}`}
+        >
           {tab.content}
         </div>
       ))}

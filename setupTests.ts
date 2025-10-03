@@ -5,3 +5,8 @@ import { vi } from 'vitest';
 if (typeof window.URL.createObjectURL === 'undefined') {
   Object.defineProperty(window.URL, 'createObjectURL', { value: vi.fn() });
 }
+
+// Mock for MediaStream
+if (typeof global.MediaStream === 'undefined') {
+  global.MediaStream = vi.fn();
+}

@@ -33,7 +33,11 @@ describe('ErrorBoundary', () => {
         <ProblemChild />
       </ErrorBoundary>
     );
-    expect(errorSpy).toHaveBeenCalledWith('Uncaught error:', expect.any(Error), expect.any(Object));
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Uncaught error:',
+      expect.any(Error),
+      expect.any(Object)
+    );
     errorSpy.mockRestore();
   });
 });

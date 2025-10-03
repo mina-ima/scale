@@ -8,10 +8,11 @@ export default defineConfig({
     host: true,
   },
   test: {
-    environment: 'jsdom',
     globals: true,
+    environment: 'jsdom',
     setupFiles: './setupTests.ts',
     exclude: ['e2e/**/*.spec.ts', 'node_modules/**'],
+    tsconfig: 'tsconfig.test.json',
     // for node-canvas
     threads: false,
     deps: {

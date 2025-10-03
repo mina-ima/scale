@@ -6,6 +6,8 @@ describe('getReferenceObjectDetectionMessage', () => {
   });
 
   it('should return a message if no reference object is detected', () => {
-    expect(getReferenceObjectDetectionMessage(false)).toBe('基準物を検出できませんでした。A4用紙などを画面内に収めてください。');
+    expect(getReferenceObjectDetectionMessage(false)).toBe(
+      '基準物を検出できませんでした。A4用紙などを画面内に収めてください。'
+    );
   });
 });

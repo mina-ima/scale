@@ -7,23 +7,26 @@ describe('Button', () => {
   const originalGetComputedStyle = window.getComputedStyle;
 
   // Mock window.getComputedStyle
-    const mockGetComputedStyle = vi.spyOn(window, 'getComputedStyle').mockImplementation((elt: Element) => {
-    const mockStyle = {
-      width: '44px',
-      height: '44px',
-      getPropertyValue: (prop: string) => {
-        if (prop === 'width') return '44px';
-        if (prop === 'height') return '44px';
-        return ''; // Default for other properties
-      },
-    } as CSSStyleDeclaration;
+  const mockGetComputedStyle = vi
+    .spyOn(window, 'getComputedStyle')
+    .mockImplementation((elt: Element) => {
+      const mockStyle = {
+        width: '44px',
+        height: '44px',
+        getPropertyValue: (prop: string) => {
+          if (prop === 'width') return '44px';
+          if (prop === 'height') return '44px';
+          return ''; // Default for other properties
+        },
+      } as CSSStyleDeclaration;
 
-    // For button elements, ensure min-width and min-height are at least 44px
-    if (elt.tagName === 'BUTTON') {
-      return mockStyle;
-    }
-    return originalGetComputedStyle(elt);
-  });  afterAll(() => {
+      // For button elements, ensure min-width and min-height are at least 44px
+      if (elt.tagName === 'BUTTON') {
+        return mockStyle;
+      }
+      return originalGetComputedStyle(elt);
+    });
+  afterAll(() => {
     mockGetComputedStyle.mockRestore();
   });
 

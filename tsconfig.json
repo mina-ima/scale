@@ -15,13 +15,14 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "webxr", "node"]
+    "types": ["vitest/globals", "webxr", "node", "vitest/globals"]
   },
   "include": [
     "src",
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.d.ts",
+    "src/types/file-system-access.d.ts",
     "setupTests.ts"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]

@@ -8,6 +8,9 @@ export default [
       globals: globals.browser,
     },
   },
+  {
+    ignores: ['dist/**', 'pnpm-lock.yaml'],
+  },
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],

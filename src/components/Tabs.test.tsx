@@ -96,4 +96,24 @@ describe('Tabs', () => {
     fireEvent.keyDown(tablist, { key: 'ArrowRight' });
     expect(onTabChange).toHaveBeenCalledWith(0);
   });
+
+  it('applies correct ARIA attributes for accessibility', () => {
+    const onTabChange = vi.fn();
+    render(<Tabs tabs={mockTabs} activeTab={0} onTabChange={onTabChange} />);
+
+    const tab1 = screen.getByRole('tab', { name: 'Tab 1' });
+    const tab2 = screen.getByRole('tab', { name: 'Tab 2' });
+    const tab3 = screen.getByRole('tab', { name: 'Tab 3' });
+
+    expect(tab1).toHaveAttribute('aria-selected', 'true');
+    expect(tab2).toHaveAttribute('aria-selected', 'false');
+    expect(tab3).toHaveAttribute('aria-selected', 'false');
+
+    expect(tab1).toHaveAttribute('aria-controls', 'tabpanel-0');
+    expect(tab2).toHaveAttribute('aria-controls', 'tabpanel-1');
+    expect(tab3).toHaveAttribute('aria-controls', 'tabpanel-2');
+
+    const panel1 = screen.getByRole('tabpanel', { hidden: false });
+    expect(panel1).toHaveAttribute('id', 'tabpanel-0');
+  });
 });

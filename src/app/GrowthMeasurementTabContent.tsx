@@ -1,15 +1,28 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useMeasureStore } from '../store/measureStore';
 import { getTapCoordinates } from '../core/fallback/utils';
-import { calculate2dDistance } from '../core/measure/calculate2dDistance';
+import { calculate2dDistance } from '../core/measure/calculate2dDistance'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { formatMeasurement } from '../core/measure/format';
 import {
   drawMeasurementLine,
   drawMeasurementLabel,
 } from '../core/render/drawMeasurement';
 import { getCameraStream, stopCameraStream } from '../core/camera/utils';
+import { ItemKey } from '../utils/fileUtils'; // Import ItemKey
 
-const MeasurePage: React.FC = () => {
+interface GrowthMeasurementTabContentProps {
+  mode: ItemKey;
+  generateFileName: (
+    mode: ItemKey,
+    valueMm: number,
+    unit: 'cm' | 'kg',
+    dateISO: string
+  ) => string;
+}
+
+const GrowthMeasurementTabContent: React.FC<
+  GrowthMeasurementTabContentProps
+> = ({ mode, generateFileName }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isWebXrSupported, setIsWebXrSupported] = useState(true);
@@ -17,6 +30,8 @@ const MeasurePage: React.FC = () => {
     null
   );
   const [cameraError, setCameraError] = useState<ErrorState | null>(null);
+  const [showToast, setShowToast] = useState(false); // Added for toast
+  const [toastMessage, setToastMessage] = useState(''); // Added for toast // eslint-disable-line @typescript-eslint/no-unused-vars
 
   const {
     points,
@@ -24,11 +39,53 @@ const MeasurePage: React.FC = () => {
     scale,
     addPoint,
     clearPoints,
-    setMeasurement,
-    measureMode,
+    setMeasurement, // eslint-disable-line @typescript-eslint/no-unused-vars
     unit,
     setUnit,
   } = useMeasureStore();
+
+  const saveImageToDevice = useCallback(
+    async (blob: Blob, fileName: string) => {
+      try {
+        // Try File System Access API first
+        if ('showSaveFilePicker' in window) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [
+              {
+                description: 'JPEG Image',
+                accept: { 'image/jpeg': ['.jpg'] },
+              },
+            ],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          console.log('Image saved using File System Access API');
+          setToastMessage('画像を保存しました！');
+          setShowToast(true);
+        } else {
+          // Fallback to download link
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          console.log('Image downloaded as fallback');
+          setToastMessage('画像をダウンロードしました！');
+          setShowToast(true);
+        }
+      } catch (error) {
+        console.error('Failed to save image:', error);
+        setToastMessage('画像の保存に失敗しました。');
+        setShowToast(true);
+      }
+    },
+    []
+  );
 
   const setupCamera = useCallback(async () => {
     setCameraError(null); // Clear previous errors
@@ -43,6 +100,16 @@ const MeasurePage: React.FC = () => {
       return null;
     }
   }, [videoRef]);
+
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => {
+        setShowToast(false);
+        setToastMessage('');
+      }, 3000); // Hide after 3 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
 
   useEffect(() => {
     if (!navigator.xr) {
@@ -102,28 +169,63 @@ const MeasurePage: React.FC = () => {
     }
   };
 
+  const composeAndSaveImage = useCallback(async () => {
+    if (!canvasRef.current || !measurement?.valueMm || !points.length) return;
+
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    // Create a temporary canvas to draw the final image
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = canvas.width;
+    finalCanvas.height = canvas.height;
+    const finalContext = finalCanvas.getContext('2d');
+    if (!finalContext) return;
+
+    // Draw current canvas content (video frame + measurement line/label)
+    finalContext.drawImage(canvas, 0, 0);
+
+    // Add date label
+    const dateText = new Date().toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    });
+    const dateFontSize = 36;
+    const dateX = finalCanvas.width - 20; // Right aligned
+    const dateY = finalCanvas.height - 20; // Bottom aligned
+
+    finalContext.font = `${dateFontSize}px sans-serif`;
+    finalContext.textAlign = 'right';
+    finalContext.textBaseline = 'bottom';
+    finalContext.fillStyle = 'white'; // Default to white, could be dynamic based on background
+    finalContext.fillText(dateText, dateX, dateY);
+
+    // Generate Blob
+    finalCanvas.toBlob(
+      (blob) => {
+        if (blob && measurement?.valueMm) {
+          const fileName = generateFileName(
+            mode,
+            measurement.valueMm,
+            'cm', // Always 'cm' for growth measurements
+            measurement.dateISO
+          );
+          saveImageToDevice(blob, fileName); // Call save function
+        }
+      },
+      'image/jpeg',
+      0.92
+    );
+  }, [canvasRef, measurement, points, unit, generateFileName, mode]);
+
   useEffect(() => {
-    if (points.length === 2) {
-      // The scale can be null in tests, so we provide a default.
-      const currentScale = scale ?? {
-        mmPerPx: 1,
-        source: 'none',
-        confidence: 1,
-      };
-      const distanceMm = calculate2dDistance(
-        points[0],
-        points[1],
-        currentScale.mmPerPx
-      );
-      const newMeasurement: MeasurementResult = {
-        mode: measureMode,
-        valueMm: distanceMm,
-        unit: unit, // Use the unit from the store
-        dateISO: new Date().toISOString(),
-      };
-      setMeasurement(newMeasurement);
+    if (measurement?.valueMm && points.length === 2) {
+      // Trigger image composition when a measurement is finalized in growth modes
+      composeAndSaveImage();
     }
-  }, [points, scale, setMeasurement, measureMode, unit]);
+  }, [measurement, points, composeAndSaveImage]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -149,8 +251,6 @@ const MeasurePage: React.FC = () => {
       // const averageFps =
       //   fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
 
-      // console.log(`Current FPS: ${currentFps.toFixed(2)}, Average FPS: ${averageFps.toFixed(2)}`);
-
       context.clearRect(0, 0, canvas.width, canvas.height);
 
       // Draw video frame if available and no image uploaded
@@ -159,7 +259,6 @@ const MeasurePage: React.FC = () => {
         videoRef.current.readyState >= 2 &&
         !uploadedImage
       ) {
-        // Ensure canvas dimensions match video for proper drawing
         if (
           canvas.width !== videoRef.current.videoWidth ||
           canvas.height !== videoRef.current.videoHeight
@@ -169,7 +268,6 @@ const MeasurePage: React.FC = () => {
         }
         context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       } else if (uploadedImage) {
-        // Draw the uploaded image, scaling it to fit the canvas
         const aspectRatio = uploadedImage.width / uploadedImage.height;
         let drawWidth = canvas.width;
         let drawHeight = canvas.width / aspectRatio;
@@ -221,7 +319,7 @@ const MeasurePage: React.FC = () => {
   return (
     <div
       className="relative w-full h-screen"
-      data-testid="measure-page-container"
+      data-testid={`growth-record-page-container-${mode}`}
     >
       <video
         ref={videoRef}
@@ -232,14 +330,14 @@ const MeasurePage: React.FC = () => {
       />
       <canvas
         ref={canvasRef}
-        data-testid="measure-canvas"
+        data-testid={`growth-record-canvas-${mode}`}
         className="absolute top-0 left-0 w-full h-full"
         onClick={handleCanvasClick}
         width={window.innerWidth}
         height={window.innerHeight}
       />
       <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded">
-        <h1 className="text-xl font-bold">計測モード</h1>
+        <h1 className="text-xl font-bold">成長記録モード ({mode})</h1>
         {cameraError && cameraError.code === 'CAMERA_DENIED' ? (
           <div className="text-red-500 text-sm mb-2">
             <p>カメラへのアクセスが拒否されました。</p>
@@ -257,8 +355,8 @@ const MeasurePage: React.FC = () => {
           </p>
         ) : null}
         {!isWebXrSupported && (
-          <p className="text-orange-500 text-sm mb-2">
-            お使いの端末ではAR非対応です。写真で計測に切り替えます。
+          <p className="text-red-500 text-sm mb-2">
+            WebXR (AR) is not supported on this device.
           </p>
         )}
         {measurement?.valueMm && (
@@ -275,19 +373,9 @@ const MeasurePage: React.FC = () => {
               value="cm"
               checked={unit === 'cm'}
               onChange={() => setUnit('cm')}
+              disabled // Disable the radio button as it's always 'cm' for these modes
             />
             <span className="ml-2">cm</span>
-          </label>
-          <label className="inline-flex items-center">
-            <input
-              type="radio"
-              className="form-radio"
-              name="unit"
-              value="m"
-              checked={unit === 'm'}
-              onChange={() => setUnit('m')}
-            />
-            <span className="ml-2">m</span>
           </label>
         </div>
         <button
@@ -296,32 +384,35 @@ const MeasurePage: React.FC = () => {
         >
           リセット
         </button>
-        {!isWebXrSupported && (
-          <div className="mt-2">
-            <label
-              htmlFor="photo-upload"
-              className="block text-sm font-medium text-gray-700"
-            >
-              写真を選択
-            </label>
-            <input
-              id="photo-upload"
-              name="photo-upload"
-              type="file"
-              accept="image/*"
-              className="mt-1 block w-full text-sm text-gray-500
+        <div className="mt-2">
+          <label
+            htmlFor="photo-upload"
+            className="block text-sm font-medium text-gray-700"
+          >
+            写真を選択
+          </label>
+          <input
+            id="photo-upload"
+            name="photo-upload"
+            type="file"
+            accept="image/*"
+            className="mt-1 block w-full text-sm text-gray-500
               file:mr-4 file:py-2 file:px-4
               file:rounded-full file:border-0
               file:text-sm file:font-semibold
               file:bg-blue-50 file:text-blue-700
               hover:file:bg-blue-100"
-              onChange={handleImageUpload}
-            />
-          </div>
-        )}
+            onChange={handleImageUpload}
+          />
+        </div>
       </div>
+      {showToast && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 };
 
-export default MeasurePage;
+export default GrowthMeasurementTabContent;

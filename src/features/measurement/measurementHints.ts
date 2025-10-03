@@ -1,5 +1,4 @@
 import { getPlaneDetectionMessage } from '../../core/ar/webxrUtils';
-import { getReferenceObjectDetectionMessage } from '../../core/reference/referenceUtils';
 
 interface MeasurementHintOptions {
   distance?: number;
@@ -7,7 +6,10 @@ interface MeasurementHintOptions {
   planeDetected?: boolean;
 }
 
-export function getMeasurementHint(mode: 'measurement' | 'fallback' | 'ar', options: MeasurementHintOptions): string | null {
+export function getMeasurementHint(
+  mode: 'measurement' | 'fallback' | 'ar',
+  options: MeasurementHintOptions
+): string | null {
   if (mode === 'measurement' && options.distance && options.distance > 10) {
     return '最大10mまで測定可能です';
   }
@@ -17,7 +19,11 @@ export function getMeasurementHint(mode: 'measurement' | 'fallback' | 'ar', opti
   }
 
   if (mode === 'ar' && options.planeDetected === false) {
-    return getPlaneDetectionMessage({ detectedPlanes: { [Symbol.iterator]: () => ({ next: () => ({ done: true }) }) } } as any);
+    return getPlaneDetectionMessage({
+      detectedPlanes: {
+        [Symbol.iterator]: () => ({ next: () => ({ done: true }) }),
+      },
+    } as unknown as XRFrame);
   }
 
   return null;
