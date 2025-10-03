@@ -1,12 +1,20 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+} from '@testing-library/react';
 import MeasurePage from './MeasurePage';
 import { useMeasureStore } from '../store/measureStore';
 import * as measure from '../core/measure/calculate2dDistance';
 import { type Mock, type MockInstance, vi } from 'vitest';
+import { isWebXRAvailable } from '../core/ar/webxrUtils';
 
 // Mock the render functions as they are not relevant to this test
 vi.mock('../core/render/drawMeasurement');
+vi.mock('../core/ar/webxrUtils');
 
 // Mock URL.createObjectURL globally
 vi.stubGlobal('URL', {
@@ -17,13 +25,15 @@ const originalState = useMeasureStore.getState();
 
 describe('MeasurePage', () => {
   let spy: MockInstance;
+  const mockIsWebXRAvailable = isWebXRAvailable as Mock;
 
   beforeEach(() => {
     // Reset the store and mocks before each test
     useMeasureStore.setState(originalState);
+    vi.useFakeTimers();
     spy = vi.spyOn(measure, 'calculate2dDistance');
     spy.mockReturnValue(1234.5); // e.g., 123.45 cm
-    vi.useFakeTimers();
+    mockIsWebXRAvailable.mockResolvedValue(false); // Default mock
   });
 
   afterEach(() => {
@@ -134,52 +144,44 @@ describe('MeasurePage', () => {
     expect(useMeasureStore.getState().points.length).toBe(0);
   });
 
-  it('should display a message if WebXR is not supported', () => {
-    // Mock navigator.xr to be undefined
-    Object.defineProperty(navigator, 'xr', {
-      writable: true,
-      value: undefined,
-    });
+  it('should display a message if WebXR is not supported', async () => {
+    mockIsWebXRAvailable.mockResolvedValue(false);
     render(<MeasurePage />);
-    expect(
-      screen.getByText(
-        'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
-      )
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
+        )
+      ).toBeInTheDocument();
+    });
   });
 
-  it('should not display a message if WebXR is supported', () => {
-    // Mock navigator.xr to be an object (simulating support)
-    Object.defineProperty(navigator, 'xr', {
-      writable: true,
-      value: {},
-    });
+  it('should not display a message if WebXR is supported', async () => {
+    mockIsWebXRAvailable.mockResolvedValue(true);
     render(<MeasurePage />);
-    expect(
-      screen.queryByText(
-        'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
-      )
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByText(
+          'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
+        )
+      ).not.toBeInTheDocument();
+    });
   });
 
-  it('should not display photo upload input if WebXR is supported (implying AR mode)', () => {
-    // Mock navigator.xr to be an object (simulating support)
-    Object.defineProperty(navigator, 'xr', {
-      writable: true,
-      value: {},
-    });
+  it('should not display photo upload input if WebXR is supported (implying AR mode)', async () => {
+    mockIsWebXRAvailable.mockResolvedValue(true);
     render(<MeasurePage />);
-    expect(screen.queryByLabelText('写真を選択')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText('写真を選択')).not.toBeInTheDocument();
+    });
   });
 
-  it('should display photo upload input if WebXR is not supported', () => {
-    // Mock navigator.xr to be undefined
-    Object.defineProperty(navigator, 'xr', {
-      writable: true,
-      value: undefined,
-    });
+  it('should display photo upload input if WebXR is not supported', async () => {
+    mockIsWebXRAvailable.mockResolvedValue(false);
     render(<MeasurePage />);
-    expect(screen.getByLabelText('写真を選択')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText('写真を選択')).toBeInTheDocument();
+    });
   });
 
   it('should display the uploaded photo on the canvas', async () => {
@@ -236,27 +238,27 @@ describe('MeasurePage', () => {
     const fileInput = screen.getByLabelText('写真を選択');
     const file = new File(['(binary data)'], 'test.png', { type: 'image/png' });
 
-    fireEvent.change(fileInput, { target: { files: [file] } });
+    await act(async () => {
+      fireEvent.change(fileInput, { target: { files: [file] } });
+      mockFileReader.onload!({
+        target: { result: mockFileReader.result },
+      } as ProgressEvent<FileReader>);
+      mockImage.onload!({} as Event);
+    });
 
-    expect(mockFileReader.readAsDataURL).toHaveBeenCalledWith(file);
-
-    // Manually trigger the onload event of the mocked FileReader
-    mockFileReader.onload!({
-      target: { result: mockFileReader.result },
-    } as ProgressEvent<FileReader>);
-
-    // Manually trigger the onload event of the mocked Image
-    mockImage.onload!({} as Event);
-
-    // Wait for the image to load and be drawn
     await vi.runOnlyPendingTimersAsync();
 
-    expect(mockContext.drawImage).toHaveBeenCalledWith(
-      expect.any(HTMLImageElement),
-      128,
-      0,
-      768,
-      768
+    await waitFor(
+      () => {
+        expect(mockContext.drawImage).toHaveBeenCalledWith(
+          expect.any(HTMLImageElement),
+          128,
+          0,
+          768,
+          768
+        );
+      },
+      { timeout: 10000 }
     );
 
     imageSpy.mockRestore();

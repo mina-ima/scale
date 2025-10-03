@@ -218,7 +218,14 @@ const GrowthMeasurementTabContent: React.FC<
       'image/jpeg',
       0.92
     );
-  }, [canvasRef, measurement, points, unit, generateFileName, mode]);
+  }, [
+    canvasRef,
+    measurement,
+    points,
+    generateFileName,
+    mode,
+    saveImageToDevice,
+  ]);
 
   useEffect(() => {
     if (measurement?.valueMm && points.length === 2) {

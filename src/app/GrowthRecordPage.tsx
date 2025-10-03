@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Tabs from '../components/Tabs';
+import WeightInputForm from '../components/WeightInputForm';
 import GrowthMeasurementTabContent from './GrowthMeasurementTabContent';
 import { generateFileName } from '../utils/fileUtils'; // Import the util
 
@@ -48,7 +49,7 @@ const GrowthRecordPage: React.FC = () => {
     },
     {
       label: '体重',
-      content: <div className="p-4">体重入力のコンテンツ</div>,
+      content: <WeightInputForm />,
     },
   ];
 

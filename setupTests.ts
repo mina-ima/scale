@@ -20,3 +20,17 @@ if (typeof navigator.mediaDevices === 'undefined') {
     },
   });
 }
+
+// Mock for requestAnimationFrame and cancelAnimationFrame
+if (typeof window.requestAnimationFrame === 'undefined') {
+  Object.defineProperty(window, 'requestAnimationFrame', {
+    writable: true,
+    value: vi.fn((cb) => cb(0)), // Immediately call the callback
+  });
+}
+if (typeof window.cancelAnimationFrame === 'undefined') {
+  Object.defineProperty(window, 'cancelAnimationFrame', {
+    writable: true,
+    value: vi.fn(),
+  });
+}

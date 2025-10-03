@@ -2,27 +2,44 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useMeasureStore } from '../store/measureStore';
 import { getTapCoordinates } from '../core/fallback/utils';
 import { calculate2dDistance } from '../core/measure/calculate2dDistance';
+import { calculate3dDistance } from '../core/measure/calculate3dDistance';
 import { formatMeasurement } from '../core/measure/format';
 import {
   drawMeasurementLine,
   drawMeasurementLabel,
 } from '../core/render/drawMeasurement';
 import { getCameraStream, stopCameraStream } from '../core/camera/utils';
+import {
+  isWebXRAvailable,
+  startXrSession,
+  initHitTestSource,
+  get3dPointFromHitTest,
+} from '../core/ar/webxrUtils';
 
 const MeasurePage: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isWebXrSupported, setIsWebXrSupported] = useState(true);
+  const [isWebXrSupported, setIsWebXrSupported] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(
     null
   );
   const [cameraError, setCameraError] = useState<ErrorState | null>(null);
 
+  // WebXR state
+  const [xrSession, setXrSession] = useState<XRSession | null>(null);
+  const [xrReferenceSpace, setXrReferenceSpace] =
+    useState<XRReferenceSpace | null>(null);
+  const [xrHitTestSource, setXrHitTestSource] =
+    useState<XRHitTestSource | null>(null);
+  const xrFrameRef = useRef<XRFrame | null>(null);
+
   const {
     points,
+    points3d,
     measurement,
     scale,
     addPoint,
+    addPoint3d,
     clearPoints,
     setMeasurement,
     measureMode,
@@ -44,35 +61,70 @@ const MeasurePage: React.FC = () => {
     }
   }, [videoRef]);
 
+  // Initialize WebXR or Fallback Camera
   useEffect(() => {
-    if (!navigator.xr) {
-      setIsWebXrSupported(false);
-    }
-
     let currentStream: MediaStream | null = null;
 
-    setupCamera().then((stream) => {
-      currentStream = stream;
-    });
+    const initialize = async () => {
+      const xrAvailable = await isWebXRAvailable();
+      setIsWebXrSupported(xrAvailable);
+
+      if (xrAvailable) {
+        const session = await startXrSession();
+        if (session) {
+          setXrSession(session);
+          const refSpace = await session.requestReferenceSpace('local');
+          setXrReferenceSpace(refSpace);
+          const hitSource = await initHitTestSource(session);
+          if (hitSource) {
+            setXrHitTestSource(hitSource);
+          }
+        }
+      } else {
+        currentStream = await setupCamera();
+      }
+    };
+
+    initialize();
 
     return () => {
       stopCameraStream(currentStream);
+      xrSession?.end();
     };
-  }, [setupCamera]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
-      // In tests, the scale might not be set initially, but we proceed.
+      if (
+        xrSession &&
+        xrHitTestSource &&
+        xrReferenceSpace &&
+        xrFrameRef.current
+      ) {
+        const point = get3dPointFromHitTest(
+          xrFrameRef.current,
+          xrHitTestSource,
+          xrReferenceSpace
+        );
+        if (point) {
+          if (points3d.length >= 2) {
+            clearPoints(); // This now clears both 2D and 3D points
+          }
+          addPoint3d(point);
+        }
+        return;
+      }
+
+      // Fallback to 2D logic
       if (!scale && process.env.NODE_ENV !== 'test') {
         console.warn('Scale is not set. Measurement will be inaccurate.');
-        // Optionally, show a message to the user.
         return;
       }
 
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      // In the test environment, the event is a simple object.
       const newPoint = getTapCoordinates(event.nativeEvent, canvas);
 
       if (points.length >= 2) {
@@ -83,7 +135,17 @@ const MeasurePage: React.FC = () => {
 
       addPoint(newPoint);
     },
-    [addPoint, clearPoints, points.length, scale]
+    [
+      xrSession,
+      xrHitTestSource,
+      xrReferenceSpace,
+      addPoint3d,
+      points3d.length,
+      clearPoints,
+      scale,
+      addPoint,
+      points.length,
+    ]
   );
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,9 +164,9 @@ const MeasurePage: React.FC = () => {
     }
   };
 
+  // 2D Measurement Calculation
   useEffect(() => {
     if (points.length === 2) {
-      // The scale can be null in tests, so we provide a default.
       const currentScale = scale ?? {
         mmPerPx: 1,
         source: 'none',
@@ -125,98 +187,111 @@ const MeasurePage: React.FC = () => {
     }
   }, [points, scale, setMeasurement, measureMode, unit]);
 
+  // 3D Measurement Calculation
+  useEffect(() => {
+    if (points3d.length === 2) {
+      const distanceMeters = calculate3dDistance(points3d[0], points3d[1]);
+      const distanceMm = distanceMeters * 1000;
+      const newMeasurement: MeasurementResult = {
+        mode: measureMode,
+        valueMm: distanceMm,
+        unit: unit,
+        dateISO: new Date().toISOString(),
+      };
+      setMeasurement(newMeasurement);
+    }
+  }, [points3d, setMeasurement, measureMode, unit]);
+
+  // Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
-    if (!context || !canvas) return;
+    if (!canvas) return;
 
     let animationFrameId: number;
-    let lastFrameTime = 0;
-    const fpsHistory: number[] = [];
-    const FPS_HISTORY_SIZE = 60; // Keep last 60 frames for average FPS
 
-    const renderLoop = (currentTime: DOMHighResTimeStamp) => {
-      if (!lastFrameTime) {
-        lastFrameTime = currentTime;
+    const renderLoop = (currentTime: DOMHighResTimeStamp, frame?: XRFrame) => {
+      // Store the latest frame for hit testing
+      if (frame) {
+        xrFrameRef.current = frame;
       }
-      const deltaTime = currentTime - lastFrameTime;
-      const currentFps = 1000 / deltaTime;
 
-      fpsHistory.push(currentFps);
-      if (fpsHistory.length > FPS_HISTORY_SIZE) {
-        fpsHistory.shift();
-      }
-      // const averageFps =
-      //   fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
+      // --- 2D Drawing Logic ---
+      if (!xrSession) {
+        const ctx = context;
+        if (!ctx) return;
 
-      // console.log(`Current FPS: ${currentFps.toFixed(2)}, Average FPS: ${averageFps.toFixed(2)}`);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      context.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Draw video frame if available and no image uploaded
-      if (
-        videoRef.current &&
-        videoRef.current.readyState >= 2 &&
-        !uploadedImage
-      ) {
-        // Ensure canvas dimensions match video for proper drawing
         if (
-          canvas.width !== videoRef.current.videoWidth ||
-          canvas.height !== videoRef.current.videoHeight
+          videoRef.current &&
+          videoRef.current.readyState >= 2 &&
+          !uploadedImage
         ) {
-          canvas.width = videoRef.current.videoWidth;
-          canvas.height = videoRef.current.videoHeight;
+          if (
+            canvas.width !== videoRef.current.videoWidth ||
+            canvas.height !== videoRef.current.videoHeight
+          ) {
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+          }
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        } else if (uploadedImage) {
+          const aspectRatio = uploadedImage.width / uploadedImage.height;
+          let drawWidth = canvas.width;
+          let drawHeight = canvas.width / aspectRatio;
+
+          if (drawHeight > canvas.height) {
+            drawHeight = canvas.height;
+            drawWidth = canvas.height * aspectRatio;
+          }
+
+          const xOffset = (canvas.width - drawWidth) / 2;
+          const yOffset = (canvas.height - drawHeight) / 2;
+
+          ctx.drawImage(uploadedImage, xOffset, yOffset, drawWidth, drawHeight);
+        } else if (process.env.NODE_ENV === 'test' && points.length > 0) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
-        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      } else if (uploadedImage) {
-        // Draw the uploaded image, scaling it to fit the canvas
-        const aspectRatio = uploadedImage.width / uploadedImage.height;
-        let drawWidth = canvas.width;
-        let drawHeight = canvas.width / aspectRatio;
 
-        if (drawHeight > canvas.height) {
-          drawHeight = canvas.height;
-          drawWidth = canvas.height * aspectRatio;
+        if (points.length === 2) {
+          drawMeasurementLine(ctx, points[0], points[1]);
         }
 
-        const xOffset = (canvas.width - drawWidth) / 2;
-        const yOffset = (canvas.height - drawHeight) / 2;
-
-        context.drawImage(
-          uploadedImage,
-          xOffset,
-          yOffset,
-          drawWidth,
-          drawHeight
-        );
-      } else if (process.env.NODE_ENV === 'test' && points.length > 0) {
-        context.fillStyle = 'white';
-        context.fillRect(0, 0, canvas.width, canvas.height);
+        if (measurement?.valueMm && points.length === 2) {
+          const formatted = formatMeasurement(measurement.valueMm, unit);
+          const midPoint = {
+            x: (points[0].x + points[1].x) / 2,
+            y: (points[0].y + points[1].y) / 2,
+          };
+          drawMeasurementLabel(ctx, formatted, midPoint.x, midPoint.y);
+        }
       }
+      // --- End of 2D Drawing ---
 
-      if (points.length === 2) {
-        drawMeasurementLine(context, points[0], points[1]);
+      // Request next frame
+      if (xrSession) {
+        animationFrameId = xrSession.requestAnimationFrame(renderLoop);
+      } else {
+        animationFrameId = requestAnimationFrame(renderLoop);
       }
-
-      if (measurement?.valueMm && points.length === 2) {
-        const formatted = formatMeasurement(measurement.valueMm, unit);
-        const midPoint = {
-          x: (points[0].x + points[1].x) / 2,
-          y: (points[0].y + points[1].y) / 2,
-        };
-        drawMeasurementLabel(context, formatted, midPoint.x, midPoint.y);
-      }
-
-      lastFrameTime = currentTime;
-      animationFrameId = requestAnimationFrame(renderLoop);
     };
 
-    animationFrameId = requestAnimationFrame(renderLoop);
+    if (xrSession) {
+      animationFrameId = xrSession.requestAnimationFrame(renderLoop);
+    } else {
+      animationFrameId = requestAnimationFrame(renderLoop);
+    }
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (xrSession) {
+        xrSession.cancelAnimationFrame(animationFrameId);
+      } else {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
-  }, [points, measurement, unit, uploadedImage, videoRef]);
+  }, [points, measurement, unit, uploadedImage, videoRef, xrSession]);
 
   return (
     <div
@@ -256,7 +331,7 @@ const MeasurePage: React.FC = () => {
             カメラエラー: {cameraError.message}
           </p>
         ) : null}
-        {!isWebXrSupported && (
+        {!isWebXrSupported && !xrSession && (
           <p className="text-orange-500 text-sm mb-2">
             お使いの端末ではAR非対応です。写真で計測に切り替えます。
           </p>
@@ -296,7 +371,7 @@ const MeasurePage: React.FC = () => {
         >
           リセット
         </button>
-        {!isWebXrSupported && (
+        {!isWebXrSupported && !xrSession && (
           <div className="mt-2">
             <label
               htmlFor="photo-upload"

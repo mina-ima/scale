@@ -42,3 +42,9 @@ declare interface ErrorState {
     | 'UNKNOWN';
   message: string;
 }
+
+declare interface Point3D {
+  x: number;
+  y: number;
+  z: number;
+}

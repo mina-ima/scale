@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["vitest/globals", "webxr", "node"]
+    "types": ["vitest/globals", "webxr", "node"],
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   }
 }

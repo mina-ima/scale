@@ -8,12 +8,12 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
-  // webServer: {
-  //   command: 'pnpm dev',
-  //   url: 'http://localhost:5173',
-  //   timeout: 120000,
-  //   reuseExistingServer: false,
-  // },
+  webServer: {
+    command: 'pnpm dev',
+    url: 'http://localhost:5173',
+    timeout: 120000,
+    reuseExistingServer: !process.env.CI,
+  },
   use: {
     navigationTimeout: 60000,
     trace: 'on-first-retry',

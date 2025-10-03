@@ -15,7 +15,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "webxr", "node", "vitest/globals"]
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": [
     "src",
