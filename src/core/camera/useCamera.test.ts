@@ -1,12 +1,22 @@
 import 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useCamera } from './useCamera';
 import { vi, Mock } from 'vitest';
 
 // Mock MediaDevices and MediaStream
+const mockStop = vi.fn();
 const mockVideoStream = {
   id: 'mock-video-stream-id',
-  getVideoTracks: () => [{ stop: vi.fn() }],
+  getTracks: () => [
+    {
+      stop: mockStop,
+    },
+  ],
+  getVideoTracks: () => [
+    {
+      stop: mockStop,
+    },
+  ],
   getAudioTracks: () => [],
   active: true,
 } as unknown as MediaStream;
@@ -52,12 +62,10 @@ describe('useCamera', () => {
   });
 
   it('should request camera access and provide a stream', async () => {
-    const { result, rerender } = renderHook(() => useCamera());
+    const { result } = renderHook(() => useCamera());
 
     await act(async () => {
-      // Trigger the effect that requests camera
-      rerender();
-      await waitFor(() => expect(result.current.stream).not.toBeNull()); // Wait for the stream to be set
+      await result.current.startCamera();
     });
 
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
@@ -73,11 +81,10 @@ describe('useCamera', () => {
       Promise.reject(mockError)
     );
 
-    const { result, rerender } = renderHook(() => useCamera());
+    const { result } = renderHook(() => useCamera());
 
     await act(async () => {
-      rerender();
-      await waitFor(() => expect(result.current.error).not.toBeNull()); // Wait for the error to be set
+      await result.current.startCamera();
     });
 
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
@@ -87,21 +94,18 @@ describe('useCamera', () => {
     expect(result.current.error).toBe(mockError);
   });
 
-  it('should stop the stream when the component unmounts', async () => {
-    const stopTrackSpy = vi.spyOn(mockVideoStream.getVideoTracks()[0], 'stop');
-
-    const { result, rerender, unmount } = renderHook(() => useCamera());
+  it('should stop the stream when stopCamera is called', async () => {
+    const { result } = renderHook(() => useCamera());
 
     await act(async () => {
-      rerender();
-      await waitFor(() => expect(result.current.stream).not.toBeNull()); // Wait for the stream to be set
+      await result.current.startCamera();
     });
 
-    expect(result.current.stream).toBe(mockVideoStream);
-    expect(stopTrackSpy).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.stopCamera();
+    });
 
-    unmount();
-
-    expect(stopTrackSpy).toHaveBeenCalled();
+    expect(mockStop).toHaveBeenCalled();
+    expect(result.current.stream).toBeNull();
   });
 });

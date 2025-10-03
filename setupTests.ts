@@ -10,3 +10,13 @@ if (typeof window.URL.createObjectURL === 'undefined') {
 if (typeof global.MediaStream === 'undefined') {
   global.MediaStream = vi.fn();
 }
+
+// Mock for navigator.mediaDevices
+if (typeof navigator.mediaDevices === 'undefined') {
+  Object.defineProperty(navigator, 'mediaDevices', {
+    writable: true,
+    value: {
+      getUserMedia: vi.fn(),
+    },
+  });
+}

@@ -5,10 +5,7 @@ describe('getCameraStream', () => {
   const mockGetUserMedia = vi.fn();
 
   beforeEach(() => {
-    Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia: mockGetUserMedia },
-      configurable: true,
-    });
+    navigator.mediaDevices.getUserMedia = mockGetUserMedia;
   });
 
   afterEach(() => {

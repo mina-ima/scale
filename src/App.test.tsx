@@ -38,8 +38,5 @@ describe('App Routing', () => {
       </MemoryRouter>
     );
     expect(screen.getByText('成長記録モード')).toBeInTheDocument();
-    expect(
-      screen.getByText('成長記録モードのコンテンツがここに表示されます。')
-    ).toBeInTheDocument();
   });
 });

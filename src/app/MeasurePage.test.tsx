@@ -3,20 +3,20 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import MeasurePage from './MeasurePage';
 import { useMeasureStore } from '../store/measureStore';
 import * as measure from '../core/measure/calculate2dDistance';
-import { Mock, mock, stubGlobal, fn, spyOn, useFakeTimers, restoreAllMocks, runOnlyPendingTimersAsync } from 'vitest';
+import { type Mock, type MockInstance, vi } from 'vitest';
 
 // Mock the render functions as they are not relevant to this test
-mock('../core/render/drawMeasurement');
+vi.mock('../core/render/drawMeasurement');
 
 // Mock URL.createObjectURL globally
-stubGlobal('URL', {
-  createObjectURL: fn(() => 'blob:test/image'),
+vi.stubGlobal('URL', {
+  createObjectURL: vi.fn(() => 'blob:test/image'),
 });
 
 const originalState = useMeasureStore.getState();
 
 describe('MeasurePage', () => {
-  let spy: SpyInstance;
+  let spy: MockInstance;
 
   beforeEach(() => {
     // Reset the store and mocks before each test
@@ -184,8 +184,11 @@ describe('MeasurePage', () => {
 
   it('should display the uploaded photo on the canvas', async () => {
     const mockImage = new Image();
-    mockImage.src =
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    mockImage.width = 100;
+    mockImage.height = 100;
+    const imageSpy = vi
+      .spyOn(window, 'Image')
+      .mockImplementation(() => mockImage);
 
     const mockContext: Partial<CanvasRenderingContext2D> = {
       drawImage: vi.fn(),
@@ -242,15 +245,20 @@ describe('MeasurePage', () => {
       target: { result: mockFileReader.result },
     } as ProgressEvent<FileReader>);
 
+    // Manually trigger the onload event of the mocked Image
+    mockImage.onload!({} as Event);
+
     // Wait for the image to load and be drawn
     await vi.runOnlyPendingTimersAsync();
 
     expect(mockContext.drawImage).toHaveBeenCalledWith(
       expect.any(HTMLImageElement),
+      128,
       0,
-      0,
-      expect.any(Number),
-      expect.any(Number)
+      768,
+      768
     );
+
+    imageSpy.mockRestore();
   });
 });
