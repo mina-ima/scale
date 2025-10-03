@@ -22,12 +22,11 @@ vi.stubGlobal('URL', {
   createObjectURL: vi.fn(() => 'blob:test/image'),
 });
 
-const { mockVideoTrack, mockMediaStream } = vi.hoisted(() => {
-  const mockVideoTrack = { stop: vi.fn() } as unknown as MediaStreamTrack;
+const { mockMediaStream } = vi.hoisted(() => {
   const mockMediaStream = {
-    getTracks: () => [mockVideoTrack],
+    getTracks: () => [],
   } as unknown as MediaStream;
-  return { mockVideoTrack, mockMediaStream };
+  return { mockMediaStream };
 });
 
 // Mock camera utilities
@@ -299,7 +298,9 @@ describe('MeasurePage', () => {
     });
 
     // Simulate video readyState
-    const videoElement = screen.getByTestId('measure-page-container').querySelector('video');
+    const videoElement = screen
+      .getByTestId('measure-page-container')
+      .querySelector('video');
     if (videoElement) {
       Object.defineProperty(videoElement, 'readyState', { value: 4 });
     }

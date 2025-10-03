@@ -144,7 +144,11 @@ const GrowthMeasurementTabContent: React.FC<
 
       if (points.length === 1) {
         addPoint(newPoint);
-        const distance = calculate2dDistance(points[0], newPoint, scale?.mmPerPx || 1);
+        const distance = calculate2dDistance(
+          points[0],
+          newPoint,
+          scale?.mmPerPx || 1
+        );
         setMeasurement({
           mode: `growth-${mode}` as MeasureMode, // Add the mode property
           valueMm: distance,

@@ -62,7 +62,10 @@ describe('GrowthMeasurementTabContent', () => {
 
     vi.mocked(useMeasureStore).mockReturnValue(mockMeasureStoreValue);
 
-    vi.mocked(fallbackUtils.getTapCoordinates).mockReturnValue({ x: 10, y: 10 });
+    vi.mocked(fallbackUtils.getTapCoordinates).mockReturnValue({
+      x: 10,
+      y: 10,
+    });
     vi.mocked(measureUtils.calculate2dDistance).mockReturnValue(100);
 
     // Mock HTMLCanvasElement.prototype.getContext
@@ -131,7 +134,12 @@ describe('GrowthMeasurementTabContent', () => {
       { x: 0, y: 0 },
       { x: 10, y: 10 },
     ]; // Two points already added
-    mockMeasureStoreValue.measurement = { mode: 'growth-height', valueMm: 100, unit: 'cm', dateISO: '2023-01-01' }; // Add mode
+    mockMeasureStoreValue.measurement = {
+      mode: 'growth-height',
+      valueMm: 100,
+      unit: 'cm',
+      dateISO: '2023-01-01',
+    }; // Add mode
 
     render(
       <GrowthMeasurementTabContent
