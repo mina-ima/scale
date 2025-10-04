@@ -15,9 +15,17 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
   use: {
-    navigationTimeout: 60000,
     trace: 'on-first-retry',
+    baseURL: 'http://localhost:5174',
   },
+
+  webServer: {
+    command: 'pnpm dev',
+    url: 'http://localhost:5174',
+    timeout: 120 * 1000,
+    reuseExistingServer: !process.env.CI,
+  },
+
   projects: [
     {
       name: 'chromium',

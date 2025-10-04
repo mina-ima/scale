@@ -34,7 +34,7 @@ declare global {
 
 test.describe('AR Mode', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
   });
 
   test('should perform a two-point measurement and display the result', async ({

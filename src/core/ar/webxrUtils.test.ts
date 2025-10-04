@@ -72,10 +72,12 @@ describe('webxrUtils', () => {
       expect(session).toBe(mockXRSession);
     });
 
-    it('should return null if session request fails', async () => {
+    it('should throw a user-friendly error for NotAllowedError', async () => {
       const mockXRSystem = {
         requestSession: vi.fn(() =>
-          Promise.reject(new Error('Session failed'))
+          Promise.reject(
+            new DOMException('Permission denied', 'NotAllowedError')
+          )
         ),
       };
       Object.defineProperty(navigator, 'xr', {
@@ -83,8 +85,55 @@ describe('webxrUtils', () => {
         configurable: true,
       });
 
-      const session = await startXrSession();
-      expect(session).toBeNull();
+      await expect(startXrSession()).rejects.toThrow(
+        'ARセッションの開始が許可されませんでした。カメラへのアクセスを許可してください。'
+      );
+    });
+
+    it('should throw a user-friendly error for NotFoundError', async () => {
+      const mockXRSystem = {
+        requestSession: vi.fn(() =>
+          Promise.reject(
+            new DOMException('No AR session found', 'NotFoundError')
+          )
+        ),
+      };
+      Object.defineProperty(navigator, 'xr', {
+        value: mockXRSystem,
+        configurable: true,
+      });
+
+      await expect(startXrSession()).rejects.toThrow(
+        'お使いのデバイスはARをサポートしていないか、AR機能が有効になっていません。'
+      );
+    });
+
+    it('should throw a generic error for other DOMExceptions', async () => {
+      const mockXRSystem = {
+        requestSession: vi.fn(() =>
+          Promise.reject(new DOMException('Unknown error', 'UnknownError'))
+        ),
+      };
+      Object.defineProperty(navigator, 'xr', {
+        value: mockXRSystem,
+        configurable: true,
+      });
+
+      await expect(startXrSession()).rejects.toThrow(
+        'ARセッションの開始中に不明なエラーが発生しました。'
+      );
+    });
+
+    it('should throw the original error for non-DOMExceptions', async () => {
+      const mockXRSystem = {
+        requestSession: vi.fn(() => Promise.reject(new Error('Generic error'))),
+      };
+      Object.defineProperty(navigator, 'xr', {
+        value: mockXRSystem,
+        configurable: true,
+      });
+
+      await expect(startXrSession()).rejects.toThrow('Generic error');
     });
   });
 

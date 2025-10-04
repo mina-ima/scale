@@ -24,11 +24,24 @@ export async function startXrSession(): Promise<XRSession | null> {
     });
     return session;
   } catch (error) {
-    console.error('Error requesting XR session:', error);
-    return null;
+    if (error instanceof DOMException) {
+      switch (error.name) {
+        case 'NotAllowedError':
+          throw new Error(
+            'ARセッションの開始が許可されませんでした。カメラへのアクセスを許可してください。'
+          );
+        case 'NotFoundError':
+          throw new Error(
+            'お使いのデバイスはARをサポートしていないか、AR機能が有効になっていません。'
+          );
+        default:
+          throw new Error('ARセッションの開始中に不明なエラーが発生しました。');
+      }
+    } else {
+      throw error;
+    }
   }
 }
-
 export async function initHitTestSource(
   session: XRSession
 ): Promise<XRHitTestSource | null> {

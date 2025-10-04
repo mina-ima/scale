@@ -1,16 +1,26 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Growth Record Mode', () => {
-  test('should record height measurement and save image with correct filename', async ({ page }) => {
-    await page.goto('http://localhost:5174/growth-record');
+  test('should record height measurement and save image with correct filename', async ({
+    page,
+  }) => {
+    await page.goto('/growth-record', {
+      waitUntil: 'networkidle',
+    });
 
     // Mock WebXR unavailability to ensure fallback mode
     await page.evaluate(() => {
-      Object.defineProperty(navigator, 'xr', { value: undefined, writable: true });
+      Object.defineProperty(navigator, 'xr', {
+        value: undefined,
+        writable: true,
+      });
     });
 
     // Ensure the "身長" tab is selected (default)
-    await expect(page.getByRole('tab', { name: '身長' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: '身長' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
 
     // Mock camera stream and getTapCoordinates for consistent testing
     await page.evaluate(() => {
@@ -27,16 +37,18 @@ test.describe('Growth Record Mode', () => {
 
     // Mock getTapCoordinates to return predictable values
     await page.evaluate(() => {
-      window.mockGetTapCoordinates = (event: MouseEvent, element: HTMLCanvasElement) => {
-        if (event.clientX === 100 && event.clientY === 100) return { x: 100, y: 100 };
-        if (event.clientX === 100 && event.clientY === 200) return { x: 100, y: 200 };
+      window.mockGetTapCoordinates = (event: MouseEvent) => {
+        if (event.clientX === 100 && event.clientY === 100)
+          return { x: 100, y: 100 };
+        if (event.clientX === 100 && event.clientY === 200)
+          return { x: 100, y: 200 };
         return { x: 0, y: 0 };
       };
     });
 
     // Mock calculate2dDistance to return a fixed value
     await page.evaluate(() => {
-      window.mockCalculate2dDistance = (p1: any, p2: any, mmPerPx: number) => {
+      window.mockCalculate2dDistance = () => {
         // Simulate a distance of 170cm
         return 1700; // 170 cm in mm
       };
@@ -44,7 +56,11 @@ test.describe('Growth Record Mode', () => {
 
     // Mock the scale to be 1mm/px for simplicity
     await page.evaluate(() => {
-      window.mockMeasureStoreScale = { source: 'none', mmPerPx: 1, confidence: 1 };
+      window.mockMeasureStoreScale = {
+        source: 'none',
+        mmPerPx: 1,
+        confidence: 1,
+      };
     });
 
     // Click on the canvas to simulate two points for measurement
@@ -72,11 +88,47 @@ test.describe('Growth Record Mode', () => {
     const expectedDate = `${year}-${month}-${day}`;
 
     // Assert the filename
-    const expectedFilenameRegex = new RegExp(`hakattake_${expectedDate}_shinchou_170\.0cm\.jpg`);
+    const expectedFilenameRegex = new RegExp(
+      `hakattake_${expectedDate}_shinchou_170\.0cm\.jpg`
+    );
     expect(download.suggestedFilename()).toMatch(expectedFilenameRegex);
 
     // You can also save the file to a temporary path if needed for further inspection
     // const path = await download.path();
     // console.log(`Downloaded to: ${path}`);
+  });
+
+  test('should record weight measurement and display toast', async ({
+    page,
+  }) => {
+    await page.goto('/growth-record', {
+      waitUntil: 'networkidle',
+    });
+
+    // Mock WebXR unavailability (if needed for consistency, though not directly related to weight)
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'xr', {
+        value: undefined,
+        writable: true,
+      });
+    });
+
+    // Click on the "体重" tab
+    await page.getByRole('tab', { name: '体重' }).click();
+    await expect(page.getByRole('tab', { name: '体重' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+
+    // Input weight value
+    const weightInput = page.locator('label:has-text("体重 (kg)")'); // Assuming a label for the input
+    await weightInput.fill('25.5');
+
+    // Click save button (assuming there's a save button for weight)
+    const saveButton = page.getByRole('button', { name: '記録' }); // Assuming a "記録" button
+    await saveButton.click();
+
+    // Expect a toast message
+    await expect(page.getByText('体重が記録されました')).toBeVisible();
   });
 });
