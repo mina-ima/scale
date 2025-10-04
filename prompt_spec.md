@@ -21,7 +21,7 @@
    4.2 計測モード（家具・部屋）
 
 - WebXRの利用可能性チェック機能 (`isWebXRAvailable`) を実装済み。
-- WebXRセッション開始/終了機能 (`startXrSession`) を実装済み。
+- WebXRセッション開始/終了機能 (`startXrSession`) を実装済み。（エラーメッセージ詳細化済み）
 - ヒットテスト初期化機能 (`initHitTestSource`) を実装済み。
 - レイキャストによる3D点取得機能 (`get3dPointFromHitTest`) を実装済み。
 - 平面検出機能 (`detectPlane`) を実装済み。
