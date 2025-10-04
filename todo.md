@@ -98,6 +98,8 @@
 - [x] 保存失敗 → 画像品質/解像度を下げて再試行 (`saveImageWithRetry`)。
 - [x] 基準物検出失敗 → ヒント/再撮影導線 (`getReferenceObjectDetectionMessage`)。
 - [x] 例外は ErrorBoundary + 各 core で捕捉、ユーザーへはダイアログ/トースト (`ErrorBoundary`)。
+- [ ] `src/core/utils/exifUtils.test.ts` の `FileReader` モック化に関するテスト失敗の解消。
+- [ ] `src/app/GrowthMeasurementTabContent.tsx` の `useCallback` 依存関係の警告解消。
 
 ## 12. アクセシビリティ/UX（P1）
 
