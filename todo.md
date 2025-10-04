@@ -40,6 +40,7 @@
 ## 4. core/ar（P0）
 
 - [x] WebXR セッション開始/終了 (`startXrSession`)、ヒットテスト初期化 (`initHitTestSource`)。
+- [x] WebXRセッション開始時のエラーメッセージ詳細化とユーザーフィードバックの実装。
 - [x] レイキャストによる 3D 点取得（`get3dPointFromHitTest`）。
 - [x] 平面未検出時のガイド表示（`detectPlane`）。
 - [x] ノイズ対策（`stabilizePoint`）で座標安定化。
