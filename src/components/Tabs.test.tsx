@@ -1,119 +1,128 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import Tabs from './Tabs';
 
 describe('Tabs', () => {
-  const mockTabs = [
-    { label: 'Tab 1', content: <div>Content of Tab 1</div> },
-    { label: 'Tab 2', content: <div>Content of Tab 2</div> },
-    { label: 'Tab 3', content: <div>Content of Tab 3</div> },
+  const tabItems = [
+    { id: 'tab1', label: 'Tab 1', content: <div>Content for Tab 1</div> },
+    { id: 'tab2', label: 'Tab 2', content: <div>Content for Tab 2</div> },
+    { id: 'tab3', label: 'Tab 3', content: <div>Content for Tab 3</div> },
   ];
 
-  it('renders correctly with initial active tab', () => {
-    const onTabChange = vi.fn();
-    render(<Tabs tabs={mockTabs} activeTab={0} onTabChange={onTabChange} />);
-
-    expect(screen.getByRole('tab', { name: 'Tab 1' })).toHaveClass(
-      'tab-active'
-    );
-    expect(screen.getByText('Content of Tab 1')).toBeInTheDocument();
-    expect(screen.getByText('Content of Tab 2')).toBeInTheDocument();
-    expect(screen.getByText('Content of Tab 3')).toBeInTheDocument();
-
-    expect(screen.getByText('Content of Tab 1')).toBeVisible();
-    expect(screen.getByText('Content of Tab 2')).not.toBeVisible();
-    expect(screen.getByText('Content of Tab 3')).not.toBeVisible();
+  it('should render tabs with correct labels', () => {
+    render(<Tabs items={tabItems} />);
+    expect(screen.getByRole('tab', { name: 'Tab 1' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Tab 2' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Tab 3' })).toBeInTheDocument();
   });
 
-  it('calls onTabChange when a tab is clicked', () => {
-    const onTabChange = vi.fn();
-    render(<Tabs tabs={mockTabs} activeTab={0} onTabChange={onTabChange} />);
+  it('should display the content of the initially active tab', async () => {
+    render(<Tabs items={tabItems} initialActiveTabId="tab2" />);
+    expect(await screen.findByText('Content for Tab 2')).toBeInTheDocument();
+    expect(screen.queryByText('Content for Tab 1')).not.toBeVisible();
+  });
 
+  it('should switch to the clicked tab and display its content', () => {
+    render(<Tabs items={tabItems} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Tab 2' }));
-    expect(onTabChange).toHaveBeenCalledWith(1);
-  });
-
-  it('navigates with ArrowRight key', () => {
-    const onTabChange = vi.fn();
-    render(<Tabs tabs={mockTabs} activeTab={0} onTabChange={onTabChange} />);
-
-    const tablist = screen.getByRole('tablist');
-    fireEvent.keyDown(tablist, { key: 'ArrowRight' });
-    expect(onTabChange).toHaveBeenCalledWith(1);
-
-    fireEvent.keyDown(tablist, { key: 'ArrowRight' });
-    expect(onTabChange).toHaveBeenCalledWith(1);
-  });
-
-  it('navigates with ArrowLeft key', () => {
-    const onTabChange = vi.fn();
-    render(<Tabs tabs={mockTabs} activeTab={1} onTabChange={onTabChange} />);
-
-    const tablist = screen.getByRole('tablist');
-    fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
-    expect(onTabChange).toHaveBeenCalledWith(0);
-
-    fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
-    expect(onTabChange).toHaveBeenCalledWith(0);
-  });
-
-  it('navigates to the first tab with Home key', () => {
-    const onTabChange = vi.fn();
-    render(<Tabs tabs={mockTabs} activeTab={2} onTabChange={onTabChange} />);
-
-    const tablist = screen.getByRole('tablist');
-    fireEvent.keyDown(tablist, { key: 'Home' });
-    expect(onTabChange).toHaveBeenCalledWith(0);
-  });
-
-  it('navigates to the last tab with End key', () => {
-    const onTabChange = vi.fn();
-    render(<Tabs tabs={mockTabs} activeTab={0} onTabChange={onTabChange} />);
-
-    const tablist = screen.getByRole('tablist');
-    fireEvent.keyDown(tablist, { key: 'End' });
-    expect(onTabChange).toHaveBeenCalledWith(2);
-  });
-
-  it('wraps around when navigating with arrow keys', () => {
-    const onTabChange = vi.fn();
-    const { rerender } = render(
-      <Tabs tabs={mockTabs} activeTab={0} onTabChange={onTabChange} />
+    expect(screen.getByText('Content for Tab 2')).toBeInTheDocument();
+    expect(screen.queryByText('Content for Tab 1')).not.toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Tab 2' })).toHaveAttribute(
+      'aria-selected',
+      'true'
     );
-
-    const tablist = screen.getByRole('tablist');
-    fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
-    expect(onTabChange).toHaveBeenCalledWith(mockTabs.length - 1);
-
-    onTabChange.mockClear();
-    rerender(
-      <Tabs
-        tabs={mockTabs}
-        activeTab={mockTabs.length - 1}
-        onTabChange={onTabChange}
-      />
+    expect(screen.getByRole('tab', { name: 'Tab 1' })).toHaveAttribute(
+      'aria-selected',
+      'false'
     );
-    fireEvent.keyDown(tablist, { key: 'ArrowRight' });
-    expect(onTabChange).toHaveBeenCalledWith(0);
   });
 
-  it('applies correct ARIA attributes for accessibility', () => {
-    const onTabChange = vi.fn();
-    render(<Tabs tabs={mockTabs} activeTab={0} onTabChange={onTabChange} />);
-
+  it('should handle keyboard navigation (ArrowRight)', () => {
+    render(<Tabs items={tabItems} />);
     const tab1 = screen.getByRole('tab', { name: 'Tab 1' });
     const tab2 = screen.getByRole('tab', { name: 'Tab 2' });
+
+    tab1.focus();
+    fireEvent.keyDown(tab1, { key: 'ArrowRight' });
+    expect(tab2).toHaveFocus();
+    expect(tab2).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Content for Tab 2')).toBeInTheDocument();
+  });
+
+  it('should handle keyboard navigation (ArrowLeft)', () => {
+    render(<Tabs items={tabItems} initialActiveTabId="tab2" />);
+    const tab1 = screen.getByRole('tab', { name: 'Tab 1' });
+    const tab2 = screen.getByRole('tab', { name: 'Tab 2' });
+
+    tab2.focus();
+    fireEvent.keyDown(tab2, { key: 'ArrowLeft' });
+    expect(tab1).toHaveFocus();
+    expect(tab1).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Content for Tab 1')).toBeInTheDocument();
+  });
+
+  it('should loop focus from last tab to first tab with ArrowRight', () => {
+    render(<Tabs items={tabItems} initialActiveTabId="tab3" />);
+    const tab1 = screen.getByRole('tab', { name: 'Tab 1' });
     const tab3 = screen.getByRole('tab', { name: 'Tab 3' });
 
+    tab3.focus();
+    fireEvent.keyDown(tab3, { key: 'ArrowRight' });
+    expect(tab1).toHaveFocus();
     expect(tab1).toHaveAttribute('aria-selected', 'true');
-    expect(tab2).toHaveAttribute('aria-selected', 'false');
-    expect(tab3).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText('Content for Tab 1')).toBeInTheDocument();
+  });
 
-    expect(tab1).toHaveAttribute('aria-controls', 'tabpanel-0');
-    expect(tab2).toHaveAttribute('aria-controls', 'tabpanel-1');
-    expect(tab3).toHaveAttribute('aria-controls', 'tabpanel-2');
+  it('should loop focus from first tab to last tab with ArrowLeft', () => {
+    render(<Tabs items={tabItems} initialActiveTabId="tab1" />);
+    const tab1 = screen.getByRole('tab', { name: 'Tab 1' });
+    const tab3 = screen.getByRole('tab', { name: 'Tab 3' });
 
-    const panel1 = screen.getByRole('tabpanel', { hidden: false });
-    expect(panel1).toHaveAttribute('id', 'tabpanel-0');
+    tab1.focus();
+    fireEvent.keyDown(tab1, { key: 'ArrowLeft' });
+    expect(tab3).toHaveFocus();
+    expect(tab3).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Content for Tab 3')).toBeInTheDocument();
+  });
+
+  it('should handle Home key to focus the first tab', () => {
+    render(<Tabs items={tabItems} initialActiveTabId="tab2" />);
+    const tab1 = screen.getByRole('tab', { name: 'Tab 1' });
+    const tab2 = screen.getByRole('tab', { name: 'Tab 2' });
+
+    tab2.focus();
+    fireEvent.keyDown(tab2, { key: 'Home' });
+    expect(tab1).toHaveFocus();
+    expect(tab1).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Content for Tab 1')).toBeInTheDocument();
+  });
+
+  it('should handle End key to focus the last tab', () => {
+    render(<Tabs items={tabItems} initialActiveTabId="tab1" />);
+    const tab1 = screen.getByRole('tab', { name: 'Tab 1' });
+    const tab3 = screen.getByRole('tab', { name: 'Tab 3' });
+
+    tab1.focus();
+    fireEvent.keyDown(tab1, { key: 'End' });
+    expect(tab3).toHaveFocus();
+    expect(tab3).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Content for Tab 3')).toBeInTheDocument();
+  });
+
+  it('should not unmount content when switching tabs', () => {
+    render(<Tabs items={tabItems} />);
+    expect(screen.getByText('Content for Tab 1')).toBeInTheDocument();
+    expect(screen.getByText('Content for Tab 2')).toBeInTheDocument();
+    expect(screen.getByText('Content for Tab 3')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tab 2' }));
+    expect(screen.getByText('Content for Tab 2')).toBeVisible();
+    expect(screen.getByText('Content for Tab 1')).not.toBeVisible();
+    expect(screen.getByText('Content for Tab 3')).not.toBeVisible();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Tab 3' }));
+    expect(screen.getByText('Content for Tab 3')).toBeVisible();
+    expect(screen.getByText('Content for Tab 1')).not.toBeVisible();
+    expect(screen.getByText('Content for Tab 2')).not.toBeVisible();
   });
 });

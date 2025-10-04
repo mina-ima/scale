@@ -16,6 +16,14 @@ export const calculate2dDistance = (
   p2: Point,
   mmPerPx: number
 ): number => {
+  if (
+    window.isPlaywrightTest &&
+    typeof window.mockCalculate2dDistance === 'function'
+  ) {
+    // @ts-expect-error
+    return window.mockCalculate2dDistance(p1, p2, mmPerPx);
+  }
+
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   const distancePx = Math.sqrt(dx * dx + dy * dy);

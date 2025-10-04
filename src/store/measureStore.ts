@@ -37,3 +37,9 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   setMeasurement: (measurement) => set({ measurement }),
   setUnit: (unit) => set({ unit }),
 }));
+
+// Expose useMeasureStore for Playwright tests
+if (typeof window !== 'undefined' && (window as any).isPlaywrightTest) {
+  // @ts-expect-error
+  window.useMeasureStore = useMeasureStore;
+}

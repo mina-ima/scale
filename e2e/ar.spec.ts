@@ -40,9 +40,16 @@ test.describe('AR Mode', () => {
   test('should perform a two-point measurement and display the result', async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript(() => (window.isPlaywrightTest = true));
     // Mock a more complete WebXR API
     await page.evaluate(() => {
-      let hitTestCount = 0;
+      let hitTestResultsIndex = 0;
+      const mockHitTestPositions = [
+        { x: 1, y: 1, z: 1 },
+        { x: 2, y: 2, z: 2 },
+      ];
+
       // Mock XRFrame
       const mockXRFrame = {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
@@ -55,9 +62,10 @@ test.describe('AR Mode', () => {
         }),
         // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
         getHitTestResults: (hitTestSource: any) => {
-          hitTestCount++;
-          const position =
-            hitTestCount === 1 ? { x: 1, y: 1, z: 1 } : { x: 2, y: 2, z: 2 };
+          const position = mockHitTestPositions[hitTestResultsIndex];
+          hitTestResultsIndex =
+            (hitTestResultsIndex + 1) % mockHitTestPositions.length; // Cycle through positions
+
           return [
             {
               // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
@@ -98,6 +106,15 @@ test.describe('AR Mode', () => {
       waitUntil: 'networkidle',
     });
 
+    // Wait for AR session to be active
+    await page.waitForFunction(() => {
+      // @ts-ignore
+      const measureStore = window.useMeasureStore.getState();
+      return (
+        measureStore.xrSession !== null && measureStore.xrHitTestSource !== null
+      );
+    });
+
     // Wait for AR mode to be active (canvas is visible)
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
@@ -105,6 +122,16 @@ test.describe('AR Mode', () => {
     // Simulate two taps on the canvas
     await canvas.click({ position: { x: 100, y: 100 } });
     await canvas.click({ position: { x: 200, y: 200 } });
+
+    // Wait for the measurement to be calculated and displayed
+    await page.waitForFunction(() => {
+      // @ts-ignore
+      const measureStore = window.useMeasureStore.getState();
+      return (
+        measureStore.measurement !== null &&
+        measureStore.measurement.valueMm > 0
+      );
+    });
 
     // The distance between (1,1,1) and (2,2,2) is sqrt(3) which is ~1.732 meters or 173.2 cm.
     const resultText = page.getByText('173.2 cm');
@@ -115,7 +142,7 @@ test.describe('AR Mode', () => {
     page,
   }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: '計測モード' }).click();
+    await page.getByText('計測モード').click();
     await page.getByRole('button', { name: 'ARモードを開始' }).click();
 
     await page.evaluate(() => {

@@ -164,7 +164,7 @@ const GrowthMeasurementTabContent: React.FC<
 
       addPoint(newPoint);
     },
-    [addPoint, clearPoints, points.length, scale, setMeasurement, unit]
+    [addPoint, clearPoints, points, scale, setMeasurement, unit, mode]
   );
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,18 +184,32 @@ const GrowthMeasurementTabContent: React.FC<
   };
 
   const composeAndSaveImage = useCallback(async () => {
-    if (!canvasRef.current || !measurement?.valueMm || !points.length) return;
+    console.log('composeAndSaveImage called');
+    if (!canvasRef.current || !measurement?.valueMm || !points.length) {
+      console.log('composeAndSaveImage: Pre-conditions not met.', {
+        canvasRef: canvasRef.current,
+        measurement: measurement?.valueMm,
+        pointsLength: points.length,
+      });
+      return;
+    }
 
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
-    if (!context) return;
+    if (!context) {
+      console.log('composeAndSaveImage: No 2D context.');
+      return;
+    }
 
     // Create a temporary canvas to draw the final image
     const finalCanvas = document.createElement('canvas');
     finalCanvas.width = canvas.width;
     finalCanvas.height = canvas.height;
     const finalContext = finalCanvas.getContext('2d');
-    if (!finalContext) return;
+    if (!finalContext) {
+      console.log('composeAndSaveImage: No final 2D context.');
+      return;
+    }
 
     // Draw current canvas content (video frame + measurement line/label)
     finalContext.drawImage(canvas, 0, 0);
@@ -219,6 +233,7 @@ const GrowthMeasurementTabContent: React.FC<
     // Generate Blob
     finalCanvas.toBlob(
       (blob) => {
+        console.log('finalCanvas.toBlob callback. Blob:', blob);
         if (blob && measurement?.valueMm) {
           const fileName = generateFileName(
             mode,
@@ -226,6 +241,7 @@ const GrowthMeasurementTabContent: React.FC<
             'cm', // Always 'cm' for growth measurements
             measurement.dateISO
           );
+          console.log('Generated fileName:', fileName);
           saveImageToDevice(blob, fileName); // Call save function
         }
       },
@@ -244,9 +260,20 @@ const GrowthMeasurementTabContent: React.FC<
   useEffect(() => {
     if (measurement?.valueMm && points.length === 2) {
       // Trigger image composition when a measurement is finalized in growth modes
+      console.log('Measurement finalized, calling composeAndSaveImage.');
       composeAndSaveImage();
     }
   }, [measurement, points, composeAndSaveImage]);
+
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => {
+        setShowToast(false);
+        setToastMessage('');
+      }, 3000); // Hide after 3 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

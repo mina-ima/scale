@@ -4,11 +4,28 @@ test.describe('Fallback Mechanism', () => {
   test('should display camera denied message and photo upload on camera permission denial', async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    // Mock WebXR unavailability
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        get: () => ({
+          getUserMedia: async () => {
+            const error = new DOMException(
+              'Permission denied',
+              'NotAllowedError'
+            );
+            throw error;
+          },
+        }),
+      });
+    });
+
     // Mock camera permission to be denied
     await page
       .context()
       .grantPermissions(['camera'], { permissions: ['camera'], mode: 'deny' });
 
+    await page.addInitScript(() => (window.isPlaywrightTest = true));
     await page.goto('/measure', {
       waitUntil: 'networkidle',
     });
@@ -52,9 +69,14 @@ test.describe('Fallback Mechanism', () => {
   test('should calculate distance correctly using an A4 paper as reference', async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript(() => (window.isPlaywrightTest = true));
     await page.goto('/measure', {
       waitUntil: 'networkidle',
     });
+
+    // Wait for window.setScale to be available
+    await page.waitForFunction(() => typeof window.setScale === 'function');
 
     // Mock WebXR unavailability
     await page.evaluate(() => {
@@ -66,12 +88,19 @@ test.describe('Fallback Mechanism', () => {
 
     // Mock the scale to simulate A4 detection
     await page.evaluate(async () => {
-      const { setScale } = await import('../src/store/measureStore');
-      setScale({
+      // @ts-ignore
+      window.setScale({
         source: 'a4',
         mmPerPx: 1, // 1 pixel = 1mm
         confidence: 1,
       });
+    });
+
+    // Wait for the scale to be applied in the component
+    await page.waitForFunction(() => {
+      // @ts-ignore
+      const scale = window.useMeasureStore.getState().scale;
+      return scale !== null && scale.source === 'a4';
     });
 
     // Simulate photo upload UI interaction (even if actual processing is mocked)
@@ -85,5 +114,49 @@ test.describe('Fallback Mechanism', () => {
 
     // Assert the result: 100px distance with 1mm/px scale should be 100mm = 10.0cm
     await expect(page.getByText('10.0 cm')).toBeVisible();
+  });
+
+  test('should calculate distance correctly using a coin as reference', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript(() => (window.isPlaywrightTest = true));
+    await page.goto('/measure', {
+      waitUntil: 'networkidle',
+    });
+
+    // Mock WebXR unavailability
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'xr', {
+        value: undefined,
+        writable: true,
+      });
+    });
+
+    // Mock the scale to simulate 10-yen coin detection (23.5mm diameter)
+    // Assuming the coin appears as 50px in the image, so scale is 23.5 / 50 = 0.47 mm/px
+    await page.evaluate(async () => {
+      // @ts-ignore
+      window.setScale({
+        source: 'coin-10',
+        mmPerPx: 0.47,
+        confidence: 1,
+      });
+    });
+
+    // Wait for the scale to be applied in the component
+    await page.waitForFunction(() => {
+      // @ts-ignore
+      const scale = window.useMeasureStore.getState().scale;
+      return scale !== null && scale.source === 'coin-10';
+    });
+
+    // Simulate two clicks on the canvas
+    const canvas = page.getByTestId('measure-canvas');
+    await canvas.click({ position: { x: 20, y: 20 } });
+    await canvas.click({ position: { x: 120, y: 20 } }); // 100px distance
+
+    // Assert the result: 100px * 0.47 mm/px = 47mm = 4.7cm
+    await expect(page.getByText('4.7 cm')).toBeVisible();
   });
 });

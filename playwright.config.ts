@@ -16,14 +16,7 @@ export default defineConfig({
   },
   use: {
     trace: 'on-first-retry',
-    baseURL: 'http://localhost:5174',
-  },
-
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:5174',
-    timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
+    baseURL: 'http://localhost:5173',
   },
 
   projects: [

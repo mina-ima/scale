@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 
-const WeightInputForm: React.FC = () => {
+interface WeightInputFormProps {
+  onSubmit: (message: string) => void;
+}
+
+const WeightInputForm: React.FC<WeightInputFormProps> = ({ onSubmit }) => {
   const [weight, setWeight] = useState<string>('');
   const [date, setDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -8,12 +12,7 @@ const WeightInputForm: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // ここに体重と日付を保存するロジックを追加
-    console.log('体重:', weight, '日付:', date);
-    alert(`体重: ${weight} kg, 日付: ${date} を保存しました。`);
-    // 保存後、フォームをリセットすることも可能
-    // setWeight('');
-    // setDate(new Date().toISOString().split('T')[0]);
+    onSubmit(`体重: ${weight} kg, 日付: ${date} を保存しました。`);
   };
 
   return (

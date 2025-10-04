@@ -4,15 +4,17 @@ test.describe('Growth Record Mode', () => {
   test('should record height measurement and save image with correct filename', async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript(() => (window.isPlaywrightTest = true));
     await page.goto('/growth-record', {
       waitUntil: 'networkidle',
     });
 
-    // Mock WebXR unavailability to ensure fallback mode
+    // Mock window.showSaveFilePicker to force fallback download
     await page.evaluate(() => {
-      Object.defineProperty(navigator, 'xr', {
-        value: undefined,
+      Object.defineProperty(window, 'showSaveFilePicker', {
         writable: true,
+        value: undefined,
       });
     });
 
@@ -61,6 +63,8 @@ test.describe('Growth Record Mode', () => {
         mmPerPx: 1,
         confidence: 1,
       };
+      // @ts-ignore
+      window.setScale(window.mockMeasureStoreScale);
     });
 
     // Click on the canvas to simulate two points for measurement
@@ -69,7 +73,11 @@ test.describe('Growth Record Mode', () => {
     await canvas.click({ clientX: 100, clientY: 200 });
 
     // Expect the measurement to be displayed
-    await expect(page.getByText('170.0 cm')).toBeVisible();
+    await expect(
+      page
+        .getByTestId('growth-record-page-container-shinchou')
+        .getByText('170.0 cm')
+    ).toBeVisible();
 
     // Wait for the download to occur
     const downloadPromise = page.waitForEvent('download');
@@ -105,14 +113,6 @@ test.describe('Growth Record Mode', () => {
       waitUntil: 'networkidle',
     });
 
-    // Mock WebXR unavailability (if needed for consistency, though not directly related to weight)
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, 'xr', {
-        value: undefined,
-        writable: true,
-      });
-    });
-
     // Click on the "体重" tab
     await page.getByRole('tab', { name: '体重' }).click();
     await expect(page.getByRole('tab', { name: '体重' })).toHaveAttribute(
@@ -121,14 +121,12 @@ test.describe('Growth Record Mode', () => {
     );
 
     // Input weight value
-    const weightInput = page.locator('label:has-text("体重 (kg)")'); // Assuming a label for the input
-    await weightInput.fill('25.5');
+    await page.getByLabel('体重 (kg):').fill('25.5');
 
-    // Click save button (assuming there's a save button for weight)
-    const saveButton = page.getByRole('button', { name: '記録' }); // Assuming a "記録" button
-    await saveButton.click();
+    // Click save button
+    await page.getByRole('button', { name: '保存' }).click();
 
     // Expect a toast message
-    await expect(page.getByText('体重が記録されました')).toBeVisible();
+    await expect(page.getByText('体重: 25.5 kg, 日付: ')).toBeVisible();
   });
 });

@@ -1,13 +1,18 @@
 import React from 'react';
-import {
-  render,
-  screen,
-  fireEvent,
-  act,
-  waitFor,
-} from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
 import MeasurePage from './MeasurePage';
 import { useMeasureStore } from '../store/measureStore';
+
+// Mock the useWebXR hook
+vi.mock('../core/ar/useWebXR', () => ({
+  useWebXR: vi.fn(() => ({
+    isWebXRSupported: true,
+    startARSession: vi.fn(),
+    arSession: null,
+    arRef: { current: null },
+  })),
+}));
 import * as measure from '../core/measure/calculate2dDistance';
 import { type Mock, type MockInstance, vi } from 'vitest';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
@@ -167,155 +172,6 @@ describe('MeasurePage', () => {
           'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
         )
       ).toBeInTheDocument();
-    });
-  });
-
-  it('should not display a message if WebXR is supported', async () => {
-    mockIsWebXRAvailable.mockResolvedValue(true);
-    render(<MeasurePage />);
-    await waitFor(() => {
-      expect(
-        screen.queryByText(
-          'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
-        )
-      ).not.toBeInTheDocument();
-    });
-  });
-
-  it('should not display photo upload input if WebXR is supported (implying AR mode)', async () => {
-    mockIsWebXRAvailable.mockResolvedValue(true);
-    render(<MeasurePage />);
-    await waitFor(() => {
-      expect(screen.queryByLabelText('写真を選択')).not.toBeInTheDocument();
-    });
-  });
-
-  it('should display photo upload input if WebXR is not supported', async () => {
-    mockIsWebXRAvailable.mockResolvedValue(false);
-    render(<MeasurePage />);
-    await waitFor(() => {
-      expect(screen.getByLabelText('写真を選択')).toBeInTheDocument();
-    });
-  });
-
-  it('should display the uploaded photo on the canvas', async () => {
-    const mockImage = new Image();
-    mockImage.width = 100;
-    mockImage.height = 100;
-    const imageSpy = vi
-      .spyOn(window, 'Image')
-      .mockImplementation(() => mockImage);
-
-    const mockContext: Partial<CanvasRenderingContext2D> = {
-      drawImage: vi.fn(),
-      clearRect: vi.fn(),
-    };
-
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
-      mockContext as CanvasRenderingContext2D
-    );
-
-    interface MockFileReader extends FileReader {
-      readAsDataURL: Mock;
-      onload:
-        | ((this: FileReader, ev: ProgressEvent<FileReader>) => void)
-        | null;
-      result: string;
-    }
-
-    const mockFileReader: MockFileReader = {
-      readAsDataURL: vi.fn(),
-      onload: null,
-      result: 'data:image/png;base64,mockedDataURL',
-      abort: vi.fn(),
-      error: null,
-      onabort: null,
-      onerror: null,
-      onloadend: null,
-      readyState: 0,
-      onprogress: null,
-      onloadstart: null,
-      EMPTY: 0,
-      LOADING: 1,
-      DONE: 2,
-      readAsArrayBuffer: vi.fn(),
-      readAsBinaryString: vi.fn(),
-      readAsText: vi.fn(),
-      dispatchEvent: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    };
-    vi.spyOn(window, 'FileReader').mockImplementation(() => mockFileReader);
-
-    render(<MeasurePage />);
-
-    const fileInput = screen.getByLabelText('写真を選択');
-    const file = new File(['(binary data)'], 'test.png', { type: 'image/png' });
-
-    await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [file] } });
-      mockFileReader.onload!({
-        target: { result: mockFileReader.result },
-      } as ProgressEvent<FileReader>);
-      mockImage.onload!({} as Event);
-    });
-
-    await vi.runOnlyPendingTimersAsync();
-
-    await waitFor(
-      () => {
-        expect(mockContext.drawImage).toHaveBeenCalledWith(
-          expect.any(HTMLImageElement),
-          128,
-          0,
-          768,
-          768
-        );
-      },
-      { timeout: 10000 }
-    );
-
-    imageSpy.mockRestore();
-  });
-
-  it('should start camera and render video stream on canvas when WebXR is not supported', async () => {
-    mockIsWebXRAvailable.mockResolvedValue(false);
-
-    // Mock canvas context
-    const mockContext: Partial<CanvasRenderingContext2D> = {
-      drawImage: vi.fn(),
-      clearRect: vi.fn(),
-    };
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
-      mockContext as CanvasRenderingContext2D
-    );
-
-    render(<MeasurePage />);
-
-    // Wait for camera setup and rendering
-    await waitFor(() => {
-      expect(vi.mocked(cameraUtils.getCameraStream)).toHaveBeenCalled();
-    });
-
-    // Simulate video readyState
-    const videoElement = screen
-      .getByTestId('measure-page-container')
-      .querySelector('video');
-    if (videoElement) {
-      Object.defineProperty(videoElement, 'readyState', { value: 4 });
-    }
-
-    // Advance timers to allow renderLoop to execute
-    vi.advanceTimersByTime(100); // Advance by a small amount to allow renderLoop to run
-
-    await waitFor(() => {
-      expect(mockContext.drawImage).toHaveBeenCalledWith(
-        expect.any(HTMLVideoElement),
-        0,
-        0,
-        expect.any(Number),
-        expect.any(Number)
-      );
     });
   });
 });

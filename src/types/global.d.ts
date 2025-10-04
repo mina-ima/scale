@@ -48,3 +48,13 @@ declare interface Point3D {
   y: number;
   z: number;
 }
+
+// For Playwright testing
+interface Window {
+  setScale: (scale: ScaleEstimation | null) => void;
+  useMeasureStore: typeof import('../store/measureStore').useMeasureStore;
+  xrFrameRef: React.MutableRefObject<XRFrame | null>;
+  mockGetTapCoordinates: (event: MouseEvent) => { x: number; y: number };
+  mockCalculate2dDistance: (p1: Point, p2: Point, mmPerPx: number) => number;
+  mockMeasureStoreScale: ScaleEstimation;
+}

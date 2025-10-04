@@ -1,81 +1,101 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 
-interface TabProps {
+interface TabItem {
+  id: string;
   label: string;
   content: React.ReactNode;
 }
 
 interface TabsProps {
-  tabs: TabProps[];
-  activeTab: number;
-  onTabChange: (index: number) => void;
+  items: TabItem[];
+  initialActiveTabId?: string;
 }
 
-const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onTabChange }) => {
-  const tabRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+const Tabs: React.FC<TabsProps> = ({ items, initialActiveTabId }) => {
+  const [activeTabId, setActiveTabId] = useState(
+    initialActiveTabId || items[0]?.id
+  );
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   useEffect(() => {
-    // Focus the active tab when it changes
-    if (tabRefs.current[activeTab]) {
-      tabRefs.current[activeTab]?.focus();
+    if (
+      initialActiveTabId &&
+      items.some((item) => item.id === initialActiveTabId)
+    ) {
+      setActiveTabId(initialActiveTabId);
+    } else if (items.length > 0) {
+      setActiveTabId(items[0].id);
     }
-  }, [activeTab]);
+  }, [items, initialActiveTabId]);
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    let newIndex = activeTab;
+  const handleTabClick = (id: string) => {
+    setActiveTabId(id);
+  };
+
+  const handleKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number
+  ) => {
+    let newIndex = index;
 
     switch (event.key) {
-      case 'ArrowLeft':
-        newIndex = (activeTab - 1 + tabs.length) % tabs.length;
-        break;
       case 'ArrowRight':
-        newIndex = (activeTab + 1) % tabs.length;
+        newIndex = (index + 1) % items.length;
+        break;
+      case 'ArrowLeft':
+        newIndex = (index - 1 + items.length) % items.length;
         break;
       case 'Home':
         newIndex = 0;
         break;
       case 'End':
-        newIndex = tabs.length - 1;
+        newIndex = items.length - 1;
         break;
       default:
         return;
     }
 
     event.preventDefault();
-    onTabChange(newIndex);
+    setActiveTabId(items[newIndex].id);
+    tabRefs.current[newIndex]?.focus();
   };
 
   return (
     <div>
-      <div role="tablist" className="tabs tabs-boxed" onKeyDown={handleKeyDown}>
-        {tabs.map((tab, index) => (
-          <a
-            key={index}
+      <div role="tablist" className="flex border-b border-gray-200">
+        {items.map((item, index) => (
+          <button
+            key={item.id}
+            id={`tab-${item.id}`}
             role="tab"
-            className={`tab ${index === activeTab ? 'tab-active' : ''}`}
-            onClick={() => onTabChange(index)}
+            aria-selected={activeTabId === item.id}
+            aria-controls={`panel-${item.id}`}
+            tabIndex={activeTabId === item.id ? 0 : -1}
+            onClick={() => handleTabClick(item.id)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
             ref={(el) => {
               tabRefs.current[index] = el;
             }}
-            tabIndex={index === activeTab ? 0 : -1}
-            aria-selected={index === activeTab}
-            aria-controls={`tabpanel-${index}`}
+            className={`py-2 px-4 text-sm font-medium ${activeTabId === item.id ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            {tab.label}
-          </a>
+            {item.label}
+          </button>
         ))}
       </div>
-      {tabs.map((tab, index) => (
-        <div
-          key={index}
-          role="tabpanel"
-          hidden={index !== activeTab}
-          id={`tabpanel-${index}`}
-          aria-labelledby={`tab-${index}`}
-        >
-          {tab.content}
-        </div>
-      ))}
+      <div className="mt-4">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            id={`panel-${item.id}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${item.id}`}
+            hidden={activeTabId !== item.id}
+            className={activeTabId === item.id ? 'block' : 'hidden'}
+          >
+            {item.content}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

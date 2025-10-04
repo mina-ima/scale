@@ -45,6 +45,7 @@ const MeasurePage: React.FC = () => {
     measureMode,
     unit,
     setUnit,
+    setScale,
   } = useMeasureStore();
 
   const setupCamera = useCallback(async () => {
@@ -66,22 +67,28 @@ const MeasurePage: React.FC = () => {
     let currentStream: MediaStream | null = null;
 
     const initialize = async () => {
+      console.log('AR: Initializing...');
       const xrAvailable = await isWebXRAvailable();
       setIsWebXrSupported(xrAvailable);
+      console.log('AR: xrAvailable =', xrAvailable);
 
       if (xrAvailable) {
         const session = await startXrSession();
         if (session) {
           setXrSession(session);
+          console.log('AR: session set');
           const refSpace = await session.requestReferenceSpace('local');
           setXrReferenceSpace(refSpace);
+          console.log('AR: refSpace set');
           const hitSource = await initHitTestSource(session);
           if (hitSource) {
             setXrHitTestSource(hitSource);
+            console.log('AR: hitSource set');
           }
         }
       } else {
         currentStream = await setupCamera();
+        console.log('AR: Fallback camera setup');
       }
     };
 
@@ -96,6 +103,11 @@ const MeasurePage: React.FC = () => {
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
+      console.log('handleCanvasClick called');
+      console.log('AR: xrSession:', xrSession);
+      console.log('AR: xrHitTestSource:', xrHitTestSource);
+      console.log('AR: xrReferenceSpace:', xrReferenceSpace);
+      console.log('AR: xrFrameRef.current:', xrFrameRef.current);
       if (
         xrSession &&
         xrHitTestSource &&
@@ -107,17 +119,19 @@ const MeasurePage: React.FC = () => {
           xrHitTestSource,
           xrReferenceSpace
         );
+        console.log('AR: get3dPointFromHitTest returned:', point);
         if (point) {
           if (points3d.length >= 2) {
             clearPoints(); // This now clears both 2D and 3D points
           }
           addPoint3d(point);
+          console.log('3D point added:', point);
         }
         return;
       }
 
       // Fallback to 2D logic
-      if (!scale && process.env.NODE_ENV !== 'test') {
+      if (!scale) {
         console.warn('Scale is not set. Measurement will be inaccurate.');
         return;
       }
@@ -126,14 +140,17 @@ const MeasurePage: React.FC = () => {
       if (!canvas) return;
 
       const newPoint = getTapCoordinates(event.nativeEvent, canvas);
+      console.log('2D newPoint:', newPoint);
 
       if (points.length >= 2) {
         clearPoints();
         addPoint(newPoint);
+        console.log('2D points cleared, new point added:', newPoint);
         return;
       }
 
       addPoint(newPoint);
+      console.log('2D point added:', newPoint);
     },
     [
       xrSession,
@@ -166,6 +183,7 @@ const MeasurePage: React.FC = () => {
 
   // 2D Measurement Calculation
   useEffect(() => {
+    console.log('2D Measurement useEffect triggered. Points:', points);
     if (points.length === 2) {
       const currentScale = scale ?? {
         mmPerPx: 1,
@@ -184,11 +202,13 @@ const MeasurePage: React.FC = () => {
         dateISO: new Date().toISOString(),
       };
       setMeasurement(newMeasurement);
+      console.log('2D Measurement calculated:', newMeasurement);
     }
   }, [points, scale, setMeasurement, measureMode, unit]);
 
   // 3D Measurement Calculation
   useEffect(() => {
+    console.log('3D Measurement useEffect triggered. Points3D:', points3d);
     if (points3d.length === 2) {
       const distanceMeters = calculate3dDistance(points3d[0], points3d[1]);
       const distanceMm = distanceMeters * 1000;
@@ -199,11 +219,13 @@ const MeasurePage: React.FC = () => {
         dateISO: new Date().toISOString(),
       };
       setMeasurement(newMeasurement);
+      console.log('3D Measurement calculated:', newMeasurement);
     }
   }, [points3d, setMeasurement, measureMode, unit]);
 
   // Render Loop
   useEffect(() => {
+    console.log('Render Loop useEffect triggered. Measurement:', measurement);
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
     if (!canvas) return;
@@ -250,7 +272,7 @@ const MeasurePage: React.FC = () => {
           const yOffset = (canvas.height - drawHeight) / 2;
 
           ctx.drawImage(uploadedImage, xOffset, yOffset, drawWidth, drawHeight);
-        } else if (process.env.NODE_ENV === 'test' && points.length > 0) {
+        } else if (window.isPlaywrightTest && points.length > 0) {
           ctx.fillStyle = 'white';
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
