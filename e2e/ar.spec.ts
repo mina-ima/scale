@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { test, expect } from '@playwright/test';
 
 declare global {
@@ -85,6 +83,7 @@ test.describe('AR Mode', () => {
       const mockXRSession = {
         requestReferenceSpace: () => Promise.resolve({}),
         requestHitTestSource: () => Promise.resolve({}),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         requestAnimationFrame: (callback: any) => {
           // Immediately invoke the callback with a mock frame
           callback(0, mockXRFrame);
@@ -108,7 +107,7 @@ test.describe('AR Mode', () => {
 
     // Wait for AR session to be active
     await page.waitForFunction(() => {
-      // @ts-ignore
+      // @ts-expect-error - Test-only access to internal state
       const measureStore = window.useMeasureStore.getState();
       return (
         measureStore.xrSession !== null && measureStore.xrHitTestSource !== null
@@ -125,7 +124,7 @@ test.describe('AR Mode', () => {
 
     // Wait for the measurement to be calculated and displayed
     await page.waitForFunction(() => {
-      // @ts-ignore
+      // @ts-expect-error - Test-only access to internal state
       const measureStore = window.useMeasureStore.getState();
       return (
         measureStore.measurement !== null &&
@@ -146,17 +145,21 @@ test.describe('AR Mode', () => {
     await page.getByRole('button', { name: 'ARモードを開始' }).click();
 
     await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).mockWebXr.startSession();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).mockWebXr.setPlaneDetected(true);
     });
 
     await page.mouse.click(100, 100);
     await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).mockWebXr.addHitTestPoint([0, 0, 0]);
     });
 
     await page.mouse.click(200, 200);
     await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (window as any).mockWebXr.addHitTestPoint([0.543, 0, 0]); // Simulate 0.543m distance
     });
 

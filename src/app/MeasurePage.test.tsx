@@ -14,7 +14,7 @@ vi.mock('../core/ar/useWebXR', () => ({
   })),
 }));
 import * as measure from '../core/measure/calculate2dDistance';
-import { type Mock, type MockInstance, vi } from 'vitest';
+import { type Mock, type MockInstance } from 'vitest';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
 import * as cameraUtils from '../core/camera/utils';
 

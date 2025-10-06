@@ -9,11 +9,8 @@ function App() {
   const { setScale } = useMeasureStore();
 
   useEffect(() => {
-    // @ts-ignore
     if (window.isPlaywrightTest) {
-      // @ts-ignore
       window.setScale = setScale;
-      // @ts-ignore
       window.useMeasureStore = useMeasureStore;
     }
   }, [setScale]);

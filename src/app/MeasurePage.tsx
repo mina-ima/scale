@@ -45,7 +45,6 @@ const MeasurePage: React.FC = () => {
     measureMode,
     unit,
     setUnit,
-    setScale,
   } = useMeasureStore();
 
   const setupCamera = useCallback(async () => {

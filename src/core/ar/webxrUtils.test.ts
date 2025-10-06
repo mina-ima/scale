@@ -191,7 +191,6 @@ describe('webxrUtils', () => {
       const mockPose = {
         transform: { position: { x: 1, y: 2, z: 3 } },
       } as unknown as XRPose;
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const mockHitTestResult = {
         getPose: vi.fn(() => mockPose),
       } as unknown as XRHitTestResult;
@@ -234,7 +233,6 @@ describe('webxrUtils', () => {
     });
 
     it('should return null if the hit test result has no pose', () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const mockHitTestResult = {
         getPose: vi.fn(() => null),
       } as unknown as XRHitTestResult;

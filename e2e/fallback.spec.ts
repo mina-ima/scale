@@ -88,7 +88,7 @@ test.describe('Fallback Mechanism', () => {
 
     // Mock the scale to simulate A4 detection
     await page.evaluate(async () => {
-      // @ts-ignore
+      // @ts-expect-error - Test-only access to internal state
       window.setScale({
         source: 'a4',
         mmPerPx: 1, // 1 pixel = 1mm
@@ -98,7 +98,7 @@ test.describe('Fallback Mechanism', () => {
 
     // Wait for the scale to be applied in the component
     await page.waitForFunction(() => {
-      // @ts-ignore
+      // @ts-expect-error - Test-only access to internal state
       const scale = window.useMeasureStore.getState().scale;
       return scale !== null && scale.source === 'a4';
     });
@@ -136,7 +136,7 @@ test.describe('Fallback Mechanism', () => {
     // Mock the scale to simulate 10-yen coin detection (23.5mm diameter)
     // Assuming the coin appears as 50px in the image, so scale is 23.5 / 50 = 0.47 mm/px
     await page.evaluate(async () => {
-      // @ts-ignore
+      // @ts-expect-error - Test-only access to internal state
       window.setScale({
         source: 'coin-10',
         mmPerPx: 0.47,
@@ -146,7 +146,7 @@ test.describe('Fallback Mechanism', () => {
 
     // Wait for the scale to be applied in the component
     await page.waitForFunction(() => {
-      // @ts-ignore
+      // @ts-expect-error - Test-only access to internal state
       const scale = window.useMeasureStore.getState().scale;
       return scale !== null && scale.source === 'coin-10';
     });

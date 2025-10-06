@@ -39,7 +39,6 @@ export const useMeasureStore = create<MeasureState>((set) => ({
 }));
 
 // Expose useMeasureStore for Playwright tests
-if (typeof window !== 'undefined' && (window as any).isPlaywrightTest) {
-  // @ts-expect-error
+if (typeof window !== 'undefined' && window.isPlaywrightTest) {
   window.useMeasureStore = useMeasureStore;
 }

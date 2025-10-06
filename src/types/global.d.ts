@@ -51,6 +51,7 @@ declare interface Point3D {
 
 // For Playwright testing
 interface Window {
+  isPlaywrightTest: boolean;
   setScale: (scale: ScaleEstimation | null) => void;
   useMeasureStore: typeof import('../store/measureStore').useMeasureStore;
   xrFrameRef: React.MutableRefObject<XRFrame | null>;

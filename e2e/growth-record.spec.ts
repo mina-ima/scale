@@ -63,7 +63,7 @@ test.describe('Growth Record Mode', () => {
         mmPerPx: 1,
         confidence: 1,
       };
-      // @ts-ignore
+      // @ts-expect-error - Test-only access to internal state
       window.setScale(window.mockMeasureStoreScale);
     });
 

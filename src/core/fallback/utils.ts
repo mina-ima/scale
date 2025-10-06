@@ -71,12 +71,11 @@ export const getTapCoordinates = (
   event: MouseEvent,
   element: MeasurableElement & { width?: number; height?: number }
 ): { x: number; y: number } => {
-  // @ts-expect-error
   if (
     window.isPlaywrightTest &&
     typeof window.mockGetTapCoordinates === 'function'
   ) {
-    // @ts-expect-error
+    return window.mockGetTapCoordinates(event);
   }
 
   const rect = element.getBoundingClientRect();
@@ -84,7 +83,6 @@ export const getTapCoordinates = (
   let displayHeight = element.naturalHeight ?? element.videoHeight;
 
   // For Playwright tests, if no natural/video dimensions, use element's current dimensions
-  // @ts-expect-error
   if (
     window.isPlaywrightTest &&
     (displayWidth === undefined || displayHeight === undefined)

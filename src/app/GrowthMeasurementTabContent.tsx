@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useMeasureStore } from '../store/measureStore';
 import { getTapCoordinates } from '../core/fallback/utils';
-import { calculate2dDistance } from '../core/measure/calculate2dDistance'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import { calculate2dDistance } from '../core/measure/calculate2dDistance';
 import { formatMeasurement } from '../core/measure/format';
 import {
   drawMeasurementLine,
@@ -31,7 +31,7 @@ const GrowthMeasurementTabContent: React.FC<
   );
   const [cameraError, setCameraError] = useState<ErrorState | null>(null);
   const [showToast, setShowToast] = useState(false); // Added for toast
-  const [toastMessage, setToastMessage] = useState(''); // Added for toast // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [toastMessage, setToastMessage] = useState(''); // Added for toast
 
   const {
     points,

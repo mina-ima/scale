@@ -20,7 +20,6 @@ export const calculate2dDistance = (
     window.isPlaywrightTest &&
     typeof window.mockCalculate2dDistance === 'function'
   ) {
-    // @ts-expect-error
     return window.mockCalculate2dDistance(p1, p2, mmPerPx);
   }
 
