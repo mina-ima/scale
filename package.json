@@ -11,7 +11,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "tailwind-init": "tailwindcss init -p"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +27,7 @@
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
     "canvas": "^3.2.0",
     "eslint": "^9.36.0",
     "eslint-plugin-react": "^7.37.5",
@@ -33,7 +35,9 @@
     "globals": "^16.4.0",
     "jsdom": "^27.0.0",
     "playwright": "^1.55.1",
+    "postcss": "^8.5.6",
     "prettier": "^3.6.2",
+    "tailwindcss": "^4.1.14",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.45.0",
     "vite": "^7.1.7",
