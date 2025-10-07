@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useMeasureStore } from '../store/measureStore';
 import { getTapCoordinates } from '../core/fallback/utils';
 import { calculate2dDistance } from '../core/measure/calculate2dDistance';
@@ -8,7 +8,7 @@ import {
   drawMeasurementLine,
   drawMeasurementLabel,
 } from '../core/render/drawMeasurement';
-import { getCameraStream, stopCameraStream } from '../core/camera/utils';
+import { useCamera } from '../core/camera/useCamera'; // useCameraフックをインポート
 import {
   isWebXRAvailable,
   startXrSession,
@@ -47,76 +47,78 @@ const MeasurePage: React.FC = () => {
     setUnit,
   } = useMeasureStore();
 
-  const setupCamera = useCallback(async () => {
-    setCameraError(null); // Clear previous errors
-    const streamResult = await getCameraStream();
-    console.log('setupCamera - streamResult:', streamResult); // 追加
-    if (streamResult instanceof MediaStream) {
-      if (videoRef.current) {
-        videoRef.current.srcObject = streamResult;
-        console.log('setupCamera - videoRef.current.srcObject set:', videoRef.current.srcObject); // 追加
-      }
-      return streamResult; // Return stream for cleanup
-    } else {
-      setCameraError(streamResult);
-      console.error('setupCamera - camera error:', streamResult); // 追加
-      return null;
+  const { stream, error: cameraHookError, startCamera, stopCamera, facingMode, toggleCameraFacingMode } = useCamera(); // useCameraフックを使用
+
+  // WebXRセッション開始関数をuseCallbackでメモ化
+  const startARSession = useCallback(async () => {
+    if (!isWebXrSupported) {
+      console.warn('AR: WebXR is not supported on this device.');
+      return;
     }
-  }, []);
+    if (xrSession) {
+      console.log('AR: Session already active.');
+      return;
+    }
 
-  // Initialize WebXR or Fallback Camera
+    console.log('AR: Attempting to start AR session via user activation.');
+    try {
+      const session = await startXrSession(); // startXrSessionを呼び出す
+      if (session) {
+        setXrSession(session);
+        console.log('AR: session set');
+        const refSpace = await session.requestReferenceSpace('local');
+        setXrReferenceSpace(refSpace);
+        console.log('AR: refSpace set');
+        const hitSource = await initHitTestSource(session);
+        if (hitSource) {
+          setXrHitTestSource(hitSource);
+          console.log('AR: hitSource set');
+        }
+      } else {
+        console.warn('AR: WebXR session failed to start after user activation.');
+      }
+    } catch (error) {
+      console.error('AR: Error during WebXR session start after user activation:', error);
+      // エラーメッセージをユーザーに表示するなどの処理を追加
+    }
+  }, [isWebXrSupported, xrSession]); // 依存配列を修正
+
+  // Initialize Camera (WebXRが利用可能かどうかに関わらず)
   useEffect(() => {
-    let currentStream: MediaStream | null = null;
+    const initializeCamera = async () => {
+      console.log('AR: Initializing camera...');
+      try {
+        const mediaStream = await startCamera();
+        if (mediaStream instanceof MediaStream && videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          console.log('AR: Camera setup initiated via useCamera hook.');
+        } else if (mediaStream && !(mediaStream instanceof MediaStream)) {
+          setCameraError(mediaStream); // エラー状態をセット
+          console.error('AR: Error during camera setup via useCamera hook:', mediaStream);
+        }
+      } catch (error) {
+        console.error('AR: Error during camera setup via useCamera hook:', error);
+      }
+    };
 
-    const initialize = async () => {
-      console.log('AR: Initializing...');
+    initializeCamera();
+
+    return () => {
+      stopCamera();
+      // xrSession?.end(); // WebXRセッションの終了はstartARSession内で管理
+    };
+  }, [startCamera, stopCamera]); // 依存配列を修正
+
+  // WebXRの利用可能性チェック
+  useEffect(() => {
+    const checkWebXRSupport = async () => {
+      console.log('AR: Checking WebXR support...');
       const xrAvailable = await isWebXRAvailable();
       setIsWebXrSupported(xrAvailable);
       console.log('AR: xrAvailable =', xrAvailable);
-
-      try {
-        // WebXRが利用可能かどうかに関わらず、カメラをセットアップ
-        currentStream = await setupCamera();
-        console.log('AR: Camera setup initiated.');
-      } catch (error) {
-        console.error('AR: Error during camera setup:', error);
-      }
-
-      if (xrAvailable) {
-        // WebXRの初期化処理
-        console.log('AR: WebXR is available, attempting to start session.');
-        try {
-          const session = await startXrSession();
-          if (session) {
-            setXrSession(session);
-            console.log('AR: session set');
-            const refSpace = await session.requestReferenceSpace('local');
-            setXrReferenceSpace(refSpace);
-            console.log('AR: refSpace set');
-            const hitSource = await initHitTestSource(session);
-            if (hitSource) {
-              setXrHitTestSource(hitSource);
-              console.log('AR: hitSource set');
-            }
-          } else {
-            console.warn('AR: WebXR session failed to start, but camera is already running.');
-          }
-        } catch (error) {
-          console.error('AR: Error during WebXR session start:', error);
-          // WebXRセッション開始失敗時もカメラは起動しているはず
-        }
-      } else {
-        console.log('AR: WebXR not available, camera is already running.');
-      }
     };
-
-    initialize();
-
-    return () => {
-      stopCameraStream(currentStream);
-      xrSession?.end();
-    };
-  }, [setupCamera, xrSession]); // xrSessionを依存配列に追加
+    checkWebXRSupport();
+  }, []); // 空の依存配列で一度だけ実行
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -354,7 +356,7 @@ const MeasurePage: React.FC = () => {
             <p>ブラウザの設定でカメラアクセスを許可してください。</p>
             <button
               className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={setupCamera}
+              onClick={startCamera}
             >
               再試行
             </button>
@@ -364,7 +366,7 @@ const MeasurePage: React.FC = () => {
             カメラエラー: {cameraError.message}
           </p>
         ) : null}
-        {!isWebXrSupported && !xrSession && (
+        {!isWebXrSupported && (
           <p className="text-orange-500 text-sm mb-2">
             お使いの端末ではAR非対応です。写真で計測に切り替えます。
           </p>
@@ -404,7 +406,21 @@ const MeasurePage: React.FC = () => {
         >
           リセット
         </button>
-        {!isWebXrSupported && !xrSession && (
+        {isWebXrSupported && !xrSession && (
+          <button
+            className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+            onClick={startARSession}
+          >
+            AR計測を開始
+          </button>
+        )}
+        <button
+          className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          onClick={toggleCameraFacingMode}
+        >
+          カメラ切り替え ({facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
+        </button>
+        {!isWebXrSupported && (
           <div className="mt-2">
             <label
               htmlFor="photo-upload"
