@@ -35,9 +35,11 @@ export async function startXrSession(): Promise<XRSession | null> {
             'お使いのデバイスはARをサポートしていないか、AR機能が有効になっていません。'
           );
         default:
+          console.error('Unknown DOMException during AR session start:', error); // エラーオブジェクトをログに出力
           throw new Error('ARセッションの開始中に不明なエラーが発生しました。');
       }
     } else {
+      console.error('Non-DOMException error during AR session start:', error); // エラーオブジェクトをログに出力
       throw error;
     }
   }
