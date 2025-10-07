@@ -2,40 +2,24 @@
 import { vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 
-const ctxMock = {
-  canvas: {},
-  // よく使う 2D API を最低限モック
-  save: vi.fn(),
-  restore: vi.fn(),
-  beginPath: vi.fn(),
-  moveTo: vi.fn(),
-  lineTo: vi.fn(),
-  closePath: vi.fn(),
-  stroke: vi.fn(),
-  fillRect: vi.fn(),
-  clearRect: vi.fn(),
-  drawImage: vi.fn(),
-  translate: vi.fn(),
-  scale: vi.fn(),
-  rotate: vi.fn(),
-  arc: vi.fn(),
-  fillText: vi.fn(),
-  measureText: vi.fn(() => ({ width: 0 })),
-  getImageData: vi.fn(() => ({ data: new Uint8ClampedArray() })),
-  putImageData: vi.fn(),
-  setTransform: vi.fn(),
-  toDataURL: vi.fn(() => 'data:image/png;base64,'),
-};
-
-Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-  value: vi.fn(() => ctxMock),
-  writable: true,
+vi.stubGlobal('HTMLCanvasElement', class MockHTMLCanvasElement extends HTMLElement {
+  constructor() {
+    super();
+    // @ts-expect-error
+    this.getContext = vi.fn((contextType) => {
+      if (contextType === '2d') {
+        return ctxMock; // Use the existing ctxMock
+      }
+      return null;
+    });
+    // @ts-expect-error
+    this.toBlob = vi.fn((cb) => {
+      cb(new Blob());
+    });
+  }
+  // Add other necessary properties/methods if needed
+  width = 300; // Default width for testing
+  height = 150; // Default height for testing
 });
 
-if (!HTMLCanvasElement.prototype.toBlob) {
-  Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
-    value: function (cb: (b: Blob) => void) {
-      cb(new Blob());
-    },
-  });
-}
+const ctxMock = {
