@@ -50,13 +50,16 @@ const MeasurePage: React.FC = () => {
   const setupCamera = useCallback(async () => {
     setCameraError(null); // Clear previous errors
     const streamResult = await getCameraStream();
+    console.log('setupCamera - streamResult:', streamResult); // 追加
     if (streamResult instanceof MediaStream) {
       if (videoRef.current) {
         videoRef.current.srcObject = streamResult;
+        console.log('setupCamera - videoRef.current.srcObject set:', videoRef.current.srcObject); // 追加
       }
       return streamResult; // Return stream for cleanup
     } else {
       setCameraError(streamResult);
+      console.error('setupCamera - camera error:', streamResult); // 追加
       return null;
     }
   }, []);
@@ -72,6 +75,8 @@ const MeasurePage: React.FC = () => {
       console.log('AR: xrAvailable =', xrAvailable);
 
       if (xrAvailable) {
+        // WebXRの初期化処理
+        console.log('AR: WebXR is available, attempting to start session.'); // 追加
         const session = await startXrSession();
         if (session) {
           setXrSession(session);
@@ -84,8 +89,13 @@ const MeasurePage: React.FC = () => {
             setXrHitTestSource(hitSource);
             console.log('AR: hitSource set');
           }
+        } else {
+          console.warn('AR: WebXR session failed to start, falling back to camera.'); // 追加
+          currentStream = await setupCamera();
+          console.log('AR: Fallback camera setup after XR session failure'); // 追加
         }
       } else {
+        console.log('AR: WebXR not available, falling back to camera.'); // 追加
         currentStream = await setupCamera();
         console.log('AR: Fallback camera setup');
       }
