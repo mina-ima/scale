@@ -7,6 +7,7 @@ vi.stubGlobal(
   'Blob',
   class MockBlob extends Blob {
     #buffer: ArrayBuffer;
+    static shouldReject = false; // Added for testing error scenarios
 
     constructor(blobParts?: BlobPart[], options?: BlobPropertyBag) {
       super(blobParts, options);
@@ -31,6 +32,9 @@ vi.stubGlobal(
       }
 
       this.arrayBuffer = vi.fn(async () => {
+        if (MockBlob.shouldReject) {
+          throw new Error('Read error');
+        }
         return this.#buffer;
       });
     }
@@ -180,16 +184,16 @@ describe('exifUtils', () => {
 
     it('should return -1 if arrayBuffer read fails', async () => {
       const mockFile = new Blob(['some data'], { type: 'image/jpeg' });
-      // Mock Blob.prototype.arrayBuffer to simulate a read error
-      const spy = vi
-        .spyOn(Blob.prototype, 'arrayBuffer')
-        .mockRejectedValueOnce(new Error('Read error'));
+      // Simulate a read error by setting the static flag on MockBlob
+      // @ts-expect-error - Accessing static property for test control
+      MockBlob.shouldReject = true;
 
       const orientation = await exifUtils.getOrientation(mockFile);
       expect(orientation).toBe(-1);
 
-      // Restore the original implementation
-      spy.mockRestore();
+      // Restore the original behavior
+      // @ts-expect-error - Accessing static property for test control
+      MockBlob.shouldReject = false;
     });
   });
 
@@ -204,23 +208,29 @@ describe('exifUtils', () => {
 
     it('should return a rotated blob if orientation is 6 (90 deg CW)', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
-      const mockRotatedFile = new Blob(['rotated content']);
       vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(6);
+
+      // Mock OffscreenCanvas context methods
+      const mockContext = {
+        translate: vi.fn(),
+        scale: vi.fn(),
+        rotate: vi.fn(),
+        drawImage: vi.fn(),
+      };
+      // @ts-expect-error - Mocking getContext
+      global.OffscreenCanvas.prototype.getContext.mockReturnValue(mockContext);
 
       const resultBlob = await exifUtils.correctImageOrientation(mockFile);
 
-      // Compare ArrayBuffer content
-      const resultBuffer = await resultBlob.arrayBuffer();
-      const expectedBuffer = await mockRotatedFile.arrayBuffer();
+      // Verify that rotation and drawing operations were called correctly
+      expect(mockContext.translate).toHaveBeenCalledWith(100, 0); // width, 0 for orientation 6
+      expect(mockContext.rotate).toHaveBeenCalledWith(0.5 * Math.PI);
+      expect(mockContext.drawImage).toHaveBeenCalledWith(expect.any(ImageBitmap), 0, 0);
+      // Verify that convertToBlob was called
+      expect(global.OffscreenCanvas.prototype.convertToBlob).toHaveBeenCalled();
 
-      expect(new Uint8Array(resultBuffer)).toEqual(
-        new Uint8Array(expectedBuffer)
-      );
-      console.log('Test Debug: resultBuffer =', new Uint8Array(resultBuffer));
-      console.log(
-        'Test Debug: expectedBuffer =',
-        new Uint8Array(expectedBuffer)
-      );
+      // The returned blob should be the one from the mock convertToBlob
+      expect(resultBlob).toBeInstanceOf(Blob);
     });
 
     it('should handle images without EXIF data gracefully', () => {
