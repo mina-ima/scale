@@ -248,56 +248,49 @@ const MeasurePage: React.FC = () => {
       }
 
       // --- 2D Drawing Logic ---
-      if (!xrSession) {
-        const ctx = context;
-        if (!ctx) return;
+      const ctx = context;
+      if (!ctx) return;
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (
-          videoRef.current &&
-          videoRef.current.readyState >= 2 &&
-          !uploadedImage
-        ) {
-          if (
-            canvas.width !== videoRef.current.videoWidth ||
-            canvas.height !== videoRef.current.videoHeight
-          ) {
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
-          }
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        } else if (uploadedImage) {
-          const aspectRatio = uploadedImage.width / uploadedImage.height;
-          let drawWidth = canvas.width;
-          let drawHeight = canvas.width / aspectRatio;
+      if (
+        videoRef.current &&
+        videoRef.current.readyState >= 2 &&
+        !uploadedImage
+      ) {
+        // カメラの映像をキャンバスに描画
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      } else if (uploadedImage) {
+        // アップロードされた画像をキャンバスに描画
+        const aspectRatio = uploadedImage.width / uploadedImage.height;
+        let drawWidth = canvas.width;
+        let drawHeight = canvas.width / aspectRatio;
 
-          if (drawHeight > canvas.height) {
-            drawHeight = canvas.height;
-            drawWidth = canvas.height * aspectRatio;
-          }
-
-          const xOffset = (canvas.width - drawWidth) / 2;
-          const yOffset = (canvas.height - drawHeight) / 2;
-
-          ctx.drawImage(uploadedImage, xOffset, yOffset, drawWidth, drawHeight);
-        } else if (window.isPlaywrightTest && points.length > 0) {
-          ctx.fillStyle = 'white';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (drawHeight > canvas.height) {
+          drawHeight = canvas.height;
+          drawWidth = canvas.height * aspectRatio;
         }
 
-        if (points.length === 2) {
-          drawMeasurementLine(ctx, points[0], points[1]);
-        }
+        const xOffset = (canvas.width - drawWidth) / 2;
+        const yOffset = (canvas.height - drawHeight) / 2;
 
-        if (measurement?.valueMm && points.length === 2) {
-          const formatted = formatMeasurement(measurement.valueMm, unit);
-          const midPoint = {
-            x: (points[0].x + points[1].x) / 2,
-            y: (points[0].y + points[1].y) / 2,
-          };
-          drawMeasurementLabel(ctx, formatted, midPoint.x, midPoint.y);
-        }
+        ctx.drawImage(uploadedImage, xOffset, yOffset, drawWidth, drawHeight);
+      } else if (window.isPlaywrightTest && points.length > 0) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      if (points.length === 2) {
+        drawMeasurementLine(ctx, points[0], points[1]);
+      }
+
+      if (measurement?.valueMm && points.length === 2) {
+        const formatted = formatMeasurement(measurement.valueMm, unit);
+        const midPoint = {
+          x: (points[0].x + points[1].x) / 2,
+          y: (points[0].y + points[1].y) / 2,
+        };
+        drawMeasurementLabel(ctx, formatted, midPoint.x, midPoint.y);
       }
       // --- End of 2D Drawing ---
 
