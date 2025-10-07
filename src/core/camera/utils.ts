@@ -1,6 +1,8 @@
-export const getCameraStream = async (): Promise<MediaStream | ErrorState> => {
+export const getCameraStream = async (facingMode: 'user' | 'environment' | undefined = 'environment'): Promise<MediaStream | ErrorState> => {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facingMode },
+    });
     return stream;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'NotAllowedError') {
