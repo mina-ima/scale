@@ -74,9 +74,13 @@ const MeasurePage: React.FC = () => {
       setIsWebXrSupported(xrAvailable);
       console.log('AR: xrAvailable =', xrAvailable);
 
+      // WebXRが利用可能かどうかに関わらず、カメラをセットアップ
+      currentStream = await setupCamera();
+      console.log('AR: Camera setup initiated.');
+
       if (xrAvailable) {
         // WebXRの初期化処理
-        console.log('AR: WebXR is available, attempting to start session.'); // 追加
+        console.log('AR: WebXR is available, attempting to start session.');
         const session = await startXrSession();
         if (session) {
           setXrSession(session);
@@ -90,14 +94,10 @@ const MeasurePage: React.FC = () => {
             console.log('AR: hitSource set');
           }
         } else {
-          console.warn('AR: WebXR session failed to start, falling back to camera.'); // 追加
-          currentStream = await setupCamera();
-          console.log('AR: Fallback camera setup after XR session failure'); // 追加
+          console.warn('AR: WebXR session failed to start, but camera is already running.');
         }
       } else {
-        console.log('AR: WebXR not available, falling back to camera.'); // 追加
-        currentStream = await setupCamera();
-        console.log('AR: Fallback camera setup');
+        console.log('AR: WebXR not available, camera is already running.');
       }
     };
 
