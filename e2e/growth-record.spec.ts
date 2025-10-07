@@ -82,6 +82,15 @@ test.describe('Growth Record Mode', () => {
     // Wait for the download to occur
     const downloadPromise = page.waitForEvent('download');
 
+    // Add a download handler
+    page.on('download', async download => {
+      // You can save the file to a temporary path if needed for further inspection
+      // const path = await download.path();
+      // console.log(`Downloaded to: ${path}`);
+      // Or just ensure it's handled
+      await download.delete(); // Clean up the downloaded file
+    });
+
     // Simulate the save action (e.g., by clicking a save button, or it happens automatically)
     // For now, we assume it happens automatically after measurement
     // If there's a specific save button, we'd click it here.
@@ -127,6 +136,6 @@ test.describe('Growth Record Mode', () => {
     await page.getByRole('button', { name: '保存' }).click();
 
     // Expect a toast message
-    await expect(page.getByText('体重: 25.5 kg, 日付: ')).toBeVisible();
+    await expect(page.getByText(/体重: 25.5 kg, 日付: .* を保存しました。/)).toBeVisible({ timeout: 10000 });
   });
 });

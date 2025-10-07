@@ -10,7 +10,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: './setupTests.ts',
+    setupFiles: ['./setupTests.ts', './test/setup.ts'],
     exclude: ['e2e/**/*.spec.ts', 'node_modules/**'],
     tsconfig: 'tsconfig.test.json',
     // for node-canvas
@@ -18,14 +18,5 @@ export default defineConfig({
     deps: {
       inline: ['canvas'],
     },
-  },
-});
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    environment: 'jsdom',
-    // ここを追加
-    setupFiles: ['test/setup.ts'],
   },
 });

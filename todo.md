@@ -98,8 +98,8 @@
 - [x] 保存失敗 → 画像品質/解像度を下げて再試行 (`saveImageWithRetry`)。
 - [x] 基準物検出失敗 → ヒント/再撮影導線 (`getReferenceObjectDetectionMessage`)。
 - [x] 例外は ErrorBoundary + 各 core で捕捉、ユーザーへはダイアログ/トースト (`ErrorBoundary`)。
-- [ ] `src/core/utils/exifUtils.test.ts` の `FileReader` モック化に関するテスト失敗の解消。
-- [ ] `src/app/GrowthMeasurementTabContent.tsx` の `useCallback` 依存関係の警告解消。
+- [x] `src/core/utils/exifUtils.test.ts` の `FileReader` モック化に関するテスト失敗の解消。
+- [x] `src/app/GrowthMeasurementTabContent.tsx` の `useCallback` 依存関係の警告解消。
 
 ## 12. アクセシビリティ/UX（P1）
 
@@ -141,10 +141,11 @@
 ## 17. 結合/E2E テスト（Playwright）（P0）
 
 - [x] 起動→権限拒否→フォールバック確認。
-- [x] AR 端末: 平面検出→2点→表示が小数1桁。
+- [ ] AR 端末: 平面検出→2点→表示が小数1桁。
 - [ ] フォールバック: A4/硬貨認識→補正→距離表示。
-- [x] 成長記録: 身長計測→画像自動保存→命名規則確認。
-- [ ] 体重: 入力→小数1桁→保存→トースト表示。
+- [ ] 成長記録: 身長計測→画像自動保存→命名規則確認。
+- [x] 体重: 入力→小数1桁→保存→トースト表示。
+- [ ] E2Eテストの安定化: ARモードのタイムアウト問題を解消（WebXRモックの統一）。
 - [ ] 10m 超過エラー、再計測で線が1本のみ維持。
 
 ## 18. 端末/環境マトリクス検証（P1）

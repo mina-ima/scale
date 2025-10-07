@@ -84,7 +84,7 @@ const GrowthMeasurementTabContent: React.FC<
         setShowToast(true);
       }
     },
-    []
+    [setToastMessage, setShowToast]
   );
 
   const setupCamera = useCallback(async () => {

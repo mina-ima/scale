@@ -10,12 +10,22 @@ vi.stubGlobal(
 
     constructor(blobParts?: BlobPart[], options?: BlobPropertyBag) {
       super(blobParts, options);
-      if (blobParts && blobParts[0] instanceof Uint8Array) {
-        this.#buffer = blobParts[0].slice().buffer; // Ensure it's a plain ArrayBuffer
-      } else if (blobParts && blobParts[0] instanceof ArrayBuffer) {
-        this.#buffer = blobParts[0];
-      } else if (blobParts && typeof blobParts[0] === 'string') {
-        this.#buffer = new TextEncoder().encode(blobParts[0]).buffer;
+      if (blobParts && blobParts.length > 0) {
+        const part = blobParts[0];
+        if (part instanceof Uint8Array) {
+          // Ensure it's a plain ArrayBuffer, not SharedArrayBuffer
+          this.#buffer = new Uint8Array(
+            part.buffer,
+            part.byteOffset,
+            part.byteLength
+          ).slice().buffer;
+        } else if (part instanceof ArrayBuffer) {
+          this.#buffer = part;
+        } else if (typeof part === 'string') {
+          this.#buffer = new TextEncoder().encode(part).buffer;
+        } else {
+          this.#buffer = new ArrayBuffer(0);
+        }
       } else {
         this.#buffer = new ArrayBuffer(0);
       }
@@ -36,35 +46,6 @@ vi.stubGlobal(
     })
   )
 );
-
-class MockFileReader {
-  onload: ((event: ProgressEvent<FileReader>) => void) | null = null;
-  onerror: ((event: ProgressEvent<FileReader>) => void) | null = null;
-  result: ArrayBuffer | string | null = null;
-  #done = false;
-
-  readAsArrayBuffer(file: Blob) {
-    if (this.#done) return;
-    this.#done = true;
-
-    queueMicrotask(async () => {
-      try {
-        if (file.size === 0) {
-          this.onerror?.(
-            new ProgressEvent('error') as ProgressEvent<FileReader>
-          );
-          return;
-        }
-        const buf = await file.arrayBuffer();
-        this.result = buf;
-        this.onload?.(new ProgressEvent('load') as ProgressEvent<FileReader>);
-      } catch {
-        this.onerror?.(new ProgressEvent('error') as ProgressEvent<FileReader>);
-      }
-    });
-  }
-}
-vi.stubGlobal('FileReader', MockFileReader);
 
 describe('exifUtils', () => {
   beforeAll(() => {
@@ -197,9 +178,18 @@ describe('exifUtils', () => {
       expect(orientation).toBe(-1);
     });
 
-    it('should return -1 if FileReader encounters an error', async () => {
+    it('should return -1 if arrayBuffer read fails', async () => {
       const mockFile = new Blob(['some data'], { type: 'image/jpeg' });
-      await expect(exifUtils.getOrientation(mockFile)).resolves.not.toBeNull();
+      // Mock Blob.prototype.arrayBuffer to simulate a read error
+      const spy = vi
+        .spyOn(Blob.prototype, 'arrayBuffer')
+        .mockRejectedValueOnce(new Error('Read error'));
+
+      const orientation = await exifUtils.getOrientation(mockFile);
+      expect(orientation).toBe(-1);
+
+      // Restore the original implementation
+      spy.mockRestore();
     });
   });
 
@@ -212,13 +202,25 @@ describe('exifUtils', () => {
       );
     });
 
-    it('should return a rotated blob if orientation is 6 (90 deg CW)', () => {
+    it('should return a rotated blob if orientation is 6 (90 deg CW)', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
       const mockRotatedFile = new Blob(['rotated content']);
       vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(6);
-      return expect(
-        exifUtils.correctImageOrientation(mockFile)
-      ).resolves.toStrictEqual(mockRotatedFile);
+
+      const resultBlob = await exifUtils.correctImageOrientation(mockFile);
+
+      // Compare ArrayBuffer content
+      const resultBuffer = await resultBlob.arrayBuffer();
+      const expectedBuffer = await mockRotatedFile.arrayBuffer();
+
+      expect(new Uint8Array(resultBuffer)).toEqual(
+        new Uint8Array(expectedBuffer)
+      );
+      console.log('Test Debug: resultBuffer =', new Uint8Array(resultBuffer));
+      console.log(
+        'Test Debug: expectedBuffer =',
+        new Uint8Array(expectedBuffer)
+      );
     });
 
     it('should handle images without EXIF data gracefully', () => {
