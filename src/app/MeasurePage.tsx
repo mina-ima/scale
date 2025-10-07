@@ -322,7 +322,9 @@ const MeasurePage: React.FC = () => {
       <video
         ref={videoRef}
         data-testid="measure-video"
-        className="absolute top-0 left-0 w-full h-full object-cover hidden"
+        className={`absolute top-0 left-0 w-full h-full object-cover ${
+          !isWebXrSupported && !xrSession ? '' : 'hidden'
+        }`}
         autoPlay
         muted
         playsInline
