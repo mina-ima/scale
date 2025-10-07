@@ -20,7 +20,7 @@ export async function startXrSession(): Promise<XRSession | null> {
 
   try {
     const session = await navigator.xr.requestSession('immersive-ar', {
-      optionalFeatures: ['dom-overlay', 'hit-test'],
+      optionalFeatures: ['hit-test'],
     });
     return session;
   } catch (error) {
