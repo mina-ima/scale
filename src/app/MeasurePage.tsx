@@ -74,27 +74,36 @@ const MeasurePage: React.FC = () => {
       setIsWebXrSupported(xrAvailable);
       console.log('AR: xrAvailable =', xrAvailable);
 
-      // WebXRが利用可能かどうかに関わらず、カメラをセットアップ
-      currentStream = await setupCamera();
-      console.log('AR: Camera setup initiated.');
+      try {
+        // WebXRが利用可能かどうかに関わらず、カメラをセットアップ
+        currentStream = await setupCamera();
+        console.log('AR: Camera setup initiated.');
+      } catch (error) {
+        console.error('AR: Error during camera setup:', error);
+      }
 
       if (xrAvailable) {
         // WebXRの初期化処理
         console.log('AR: WebXR is available, attempting to start session.');
-        const session = await startXrSession();
-        if (session) {
-          setXrSession(session);
-          console.log('AR: session set');
-          const refSpace = await session.requestReferenceSpace('local');
-          setXrReferenceSpace(refSpace);
-          console.log('AR: refSpace set');
-          const hitSource = await initHitTestSource(session);
-          if (hitSource) {
-            setXrHitTestSource(hitSource);
-            console.log('AR: hitSource set');
+        try {
+          const session = await startXrSession();
+          if (session) {
+            setXrSession(session);
+            console.log('AR: session set');
+            const refSpace = await session.requestReferenceSpace('local');
+            setXrReferenceSpace(refSpace);
+            console.log('AR: refSpace set');
+            const hitSource = await initHitTestSource(session);
+            if (hitSource) {
+              setXrHitTestSource(hitSource);
+              console.log('AR: hitSource set');
+            }
+          } else {
+            console.warn('AR: WebXR session failed to start, but camera is already running.');
           }
-        } else {
-          console.warn('AR: WebXR session failed to start, but camera is already running.');
+        } catch (error) {
+          console.error('AR: Error during WebXR session start:', error);
+          // WebXRセッション開始失敗時もカメラは起動しているはず
         }
       } else {
         console.log('AR: WebXR not available, camera is already running.');
@@ -107,8 +116,7 @@ const MeasurePage: React.FC = () => {
       stopCameraStream(currentStream);
       xrSession?.end();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setupCamera]); // Run only once
+  }, [setupCamera, xrSession]); // xrSessionを依存配列に追加
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
