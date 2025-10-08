@@ -263,31 +263,39 @@ const MeasurePage: React.FC = () => {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (
-        videoRef.current &&
-        videoRef.current.readyState >= 2 &&
-        !uploadedImage
-      ) {
-        // カメラの映像をキャンバスに描画
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      } else if (uploadedImage) {
-        // アップロードされた画像をキャンバスに描画
-        const aspectRatio = uploadedImage.width / uploadedImage.height;
-        let drawWidth = canvas.width;
-        let drawHeight = canvas.width / aspectRatio;
+      if (!xrSession) {
+        if (
+          videoRef.current &&
+          videoRef.current.readyState >= 2 &&
+          !uploadedImage
+        ) {
+          // カメラの映像をキャンバスに描画
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        } else if (uploadedImage) {
+          // アップロードされた画像をキャンバスに描画
+          const aspectRatio = uploadedImage.width / uploadedImage.height;
+          let drawWidth = canvas.width;
+          let drawHeight = canvas.width / aspectRatio;
 
-        if (drawHeight > canvas.height) {
-          drawHeight = canvas.height;
-          drawWidth = canvas.height * aspectRatio;
+          if (drawHeight > canvas.height) {
+            drawHeight = canvas.height;
+            drawWidth = canvas.height * aspectRatio;
+          }
+
+          const xOffset = (canvas.width - drawWidth) / 2;
+          const yOffset = (canvas.height - drawHeight) / 2;
+
+          ctx.drawImage(
+            uploadedImage,
+            xOffset,
+            yOffset,
+            drawWidth,
+            drawHeight
+          );
+        } else if (window.isPlaywrightTest && points.length > 0) {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
-
-        const xOffset = (canvas.width - drawWidth) / 2;
-        const yOffset = (canvas.height - drawHeight) / 2;
-
-        ctx.drawImage(uploadedImage, xOffset, yOffset, drawWidth, drawHeight);
-      } else if (window.isPlaywrightTest && points.length > 0) {
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
       if (points.length === 2) {
