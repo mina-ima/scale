@@ -48,13 +48,12 @@ const MeasurePage: React.FC = () => {
       rendererRef.current = renderer;
 
       const referenceSpace = await session.requestReferenceSpace('local-floor');
-      await renderer.xr.setSession(session);
       renderer.xr.setReferenceSpace(referenceSpace);
-
+      await renderer.xr.setSession(session);
       setXrSession(session);
 
       session.addEventListener('end', () => {
-        renderer.xr.enabled = false;
+        renderer.xr.setAnimationLoop(null);
         renderer.dispose();
         rendererRef.current = null;
         setXrSession(null);
@@ -103,22 +102,18 @@ const MeasurePage: React.FC = () => {
       scene.add(reticle);
 
       let hitTestSource: XRHitTestSource | null = null;
-      let hitTestSourceRequested = false;
+
+      renderer.xr.getSession()?.requestReferenceSpace('viewer').then(viewerSpace => {
+          renderer.xr.getSession()?.requestHitTestSource({ space: viewerSpace }).then(source => {
+              hitTestSource = source;
+          });
+      });
 
       const renderLoop = (timestamp: number, frame: XRFrame) => {
-        if (!frame) return;
-        const session = renderer.xr.getSession();
-        if (!session) return;
-        session.requestAnimationFrame(renderLoop);
+        if (!frame || !renderer || !renderer.xr.isPresenting) return;
+
         const referenceSpace = renderer.xr.getReferenceSpace();
         if (!referenceSpace) return;
-
-        if (!hitTestSourceRequested) {
-          session.requestHitTestSource({ space: referenceSpace }).then((source) => {
-            hitTestSource = source;
-          });
-          hitTestSourceRequested = true;
-        }
 
         if (hitTestSource) {
           const hitTestResults = frame.getHitTestResults(hitTestSource);
@@ -146,10 +141,14 @@ const MeasurePage: React.FC = () => {
         }
         renderer.render(scene, camera);
       };
-      session.requestAnimationFrame(renderLoop);
+
+      renderer.setAnimationLoop(renderLoop);
 
       return () => {
         scene.remove(reticle);
+        if(rendererRef.current){
+            rendererRef.current.setAnimationLoop(null);
+        }
       };
     }
   }, [xrSession, isTapping, addPoint3d, clearPoints, points3d.length]);
