@@ -14,6 +14,7 @@ import {
   startXrSession,
   initHitTestSource,
   get3dPointFromHitTest,
+  detectPlane, // detectPlaneをインポート
 } from '../core/ar/webxrUtils';
 
 const MeasurePage: React.FC = () => {
@@ -373,6 +374,16 @@ const MeasurePage: React.FC = () => {
         {measurement?.valueMm && (
           <p className="text-lg">
             {formatMeasurement(measurement.valueMm, unit)}
+          </p>
+        )}
+        {xrSession && !xrFrameRef.current && ( // ARセッション中でフレームがない場合
+          <p className="text-orange-500 text-sm mb-2">
+            AR: デバイスを動かして周囲の平面を検出してください。
+          </p>
+        )}
+        {xrSession && xrFrameRef.current && !detectPlane(xrFrameRef.current) && ( // ARセッション中で平面が検出されていない場合
+          <p className="text-orange-500 text-sm mb-2">
+            AR: 床や壁を映してください。
           </p>
         )}
         <div className="flex space-x-2 mt-2">
