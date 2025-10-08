@@ -35,7 +35,7 @@ const MeasurePage: React.FC = () => {
 
     try {
       const session = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test'],
+        requiredFeatures: ['hit-test', 'local-floor'],
       });
 
       const renderer = new THREE.WebGLRenderer({
@@ -47,7 +47,10 @@ const MeasurePage: React.FC = () => {
       renderer.xr.enabled = true;
       rendererRef.current = renderer;
 
+      const referenceSpace = await session.requestReferenceSpace('local-floor');
       await renderer.xr.setSession(session);
+      renderer.xr.setReferenceSpace(referenceSpace);
+
       setXrSession(session);
 
       session.addEventListener('end', () => {
@@ -111,10 +114,8 @@ const MeasurePage: React.FC = () => {
         if (!referenceSpace) return;
 
         if (!hitTestSourceRequested) {
-          session.requestReferenceSpace('viewer').then((refSpace) => {
-            session.requestHitTestSource({ space: refSpace }).then((source) => {
-              hitTestSource = source;
-            });
+          session.requestHitTestSource({ space: referenceSpace }).then((source) => {
+            hitTestSource = source;
           });
           hitTestSourceRequested = true;
         }
