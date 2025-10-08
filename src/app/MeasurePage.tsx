@@ -83,26 +83,12 @@ const MeasurePage: React.FC = () => {
     }
   }, [isWebXrSupported, xrSession]); // 依存配列を修正
 
-  // Initialize Camera (WebXRが利用可能かどうかに関わらず)
+  // Initialize Camera (useCameraフックのstreamをvideoRefに設定)
   useEffect(() => {
-    const initializeCamera = async () => {
-      console.log('AR: Initializing camera...');
-      try {
-        const mediaStream = await startCamera();
-        if (mediaStream instanceof MediaStream && videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          console.log('AR: Camera setup initiated via useCamera hook.');
-        } else if (mediaStream && !(mediaStream instanceof MediaStream)) {
-          setCameraError(mediaStream); // エラー状態をセット
-          console.error('AR: Error during camera setup via useCamera hook:', mediaStream);
-        }
-      } catch (error) {
-        console.error('AR: Error during camera setup via useCamera hook:', error);
-      }
-    };
-
-    initializeCamera();
-
+    if (stream && videoRef.current && videoRef.current.srcObject !== stream) { // streamが変更された場合のみ設定
+      videoRef.current.srcObject = stream;
+      console.log('AR: Camera stream assigned to video element.');
+    }
     return () => {
       // コンポーネントのアンマウント時やstreamが変更されたときにストリームを停止
       if (videoRef.current && videoRef.current.srcObject) {
@@ -110,10 +96,17 @@ const MeasurePage: React.FC = () => {
         videoRef.current.srcObject = null;
       }
       // useCameraフックから提供されるstopCamera関数を直接呼び出す
-      stopCamera();
-      xrSession?.end(); // xrSessionの終了もここで行う
+      // stopCameraはuseCameraフック内で管理されるため、ここでは呼び出さない
+      // xrSession?.end(); // WebXRセッションの終了はstartARSession内で管理
     };
-  }, [stream, stopCamera, xrSession]); // stopCameraを依存配列に追加
+  }, [stream]); // streamが変更されたときにのみ実行
+
+  // WebXRセッションの終了処理
+  useEffect(() => {
+    return () => {
+      xrSession?.end();
+    };
+  }, [xrSession]); // xrSessionが変更されたときにのみ実行
 
   // WebXRの利用可能性チェック
   useEffect(() => {
