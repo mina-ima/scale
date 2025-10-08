@@ -381,6 +381,16 @@ const MeasurePage: React.FC = () => {
             AR: デバイスを動かして周囲の平面を検出してください。
           </p>
         )}
+        {xrSession && xrFrameRef.current && detectPlane(xrFrameRef.current) && points3d.length === 0 && ( // ARセッション中で平面が検出され、まだ計測点が選択されていない場合
+          <p className="text-green-500 text-sm mb-2">
+            AR: 平面が検出されました。計測の始点をタップしてください。
+          </p>
+        )}
+        {xrSession && xrFrameRef.current && detectPlane(xrFrameRef.current) && points3d.length === 1 && ( // ARセッション中で平面が検出され、始点が選択されている場合
+          <p className="text-green-500 text-sm mb-2">
+            AR: 計測の終点をタップしてください。
+          </p>
+        )}
         {xrSession && xrFrameRef.current && !detectPlane(xrFrameRef.current) && ( // ARセッション中で平面が検出されていない場合
           <p className="text-orange-500 text-sm mb-2">
             AR: 床や壁を映してください。
