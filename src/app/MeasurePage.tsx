@@ -1,46 +1,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useMeasureStore } from '../store/measureStore';
+import { calculate3dDistance } from '../core/measure/calculate3dDistance';
+import { formatMeasurement } from '../core/measure/format';
 import { useCamera } from '../core/camera/useCamera';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
 
 const MeasurePage: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [isWebXrSupported, setIsWebXrSupported] = useState(false);
+
+  // Component-local state for AR and UI
+  const [xrSession, setXrSession] = useState<XRSession | null>(null);
+  const [isPlaneDetected, setIsPlaneDetected] = useState(false);
+  const [arError, setArError] = useState<string | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef(new THREE.Scene());
   const cameraRef = useRef(new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20));
   const lineRef = useRef<THREE.Line | null>(null);
   const [isTapping, setIsTapping] = useState(false);
 
-  const {
-    points3d,
-    addPoint3d,
-    clearPoints,
-    setIsArMode,
-    setIsPlaneDetected,
-    setArError,
-    setFacingMode,
-  } = useMeasureStore();
-
-  const { stream, startCamera, toggleCameraFacingMode, facingMode } = useCamera();
-
-  useEffect(() => {
-    setFacingMode(facingMode);
-  }, [facingMode, setFacingMode]);
-
-  // Listen for external command to toggle camera
-  useEffect(() => {
-      const unsubscribe = useMeasureStore.subscribe(
-          (state, prevState) => {
-              if (state.cameraToggleRequested && !prevState.cameraToggleRequested) {
-                  toggleCameraFacingMode();
-                  useMeasureStore.setState({ cameraToggleRequested: false });
-              }
-          }
-      );
-      return unsubscribe;
-  }, [toggleCameraFacingMode]);
+  const { points3d, measurement, addPoint3d, clearPoints, setMeasurement, unit } = useMeasureStore();
+  const { stream, startCamera, facingMode, toggleCameraFacingMode } = useCamera();
 
   useEffect(() => {
     if (stream && videoRef.current) {
@@ -72,113 +54,101 @@ const MeasurePage: React.FC = () => {
       const referenceSpace = await session.requestReferenceSpace('local-floor');
       renderer.xr.setReferenceSpace(referenceSpace);
       await renderer.xr.setSession(session);
-      
-      setIsArMode(true);
+      setXrSession(session);
 
       session.addEventListener('end', () => {
         renderer.xr.setAnimationLoop(null);
         renderer.dispose();
         rendererRef.current = null;
-        setIsArMode(false);
+        setXrSession(null);
         setIsPlaneDetected(false);
       });
     } catch (error) {
       console.error('AR Error:', error);
       setArError(error instanceof Error ? error.message : String(error));
     }
-  }, [setIsArMode, setIsPlaneDetected, setArError]);
-
-  // Listen for external command to start AR
-  useEffect(() => {
-      const unsubscribe = useMeasureStore.subscribe(
-          (state, prevState) => {
-              if (state.isArMode && !prevState.isArMode) {
-                  startARSession();
-              }
-          }
-      );
-      return unsubscribe;
-  }, [startARSession]);
+  }, []);
 
   useEffect(() => {
-    isWebXRAvailable().then(isSupported => {
-        useMeasureStore.setState({ isWebXrSupported: isSupported });
-    });
+    isWebXRAvailable().then(setIsWebXrSupported);
     startCamera();
   }, [startCamera]);
 
   const handleCanvasClick = useCallback(() => {
-    if (useMeasureStore.getState().isArMode) {
+    if (xrSession) {
       setIsTapping(true);
     }
-  }, []);
+  }, [xrSession]);
 
   useEffect(() => {
+    if (points3d.length === 2) {
+      const distanceMeters = calculate3dDistance(points3d[0], points3d[1]);
+      setMeasurement({ mode: 'ar', valueMm: distanceMeters * 1000, unit: unit, dateISO: new Date().toISOString() });
+    }
+  }, [points3d, setMeasurement, unit]);
+
+  useEffect(() => {
+    if (!xrSession || !rendererRef.current) return;
+
     const renderer = rendererRef.current;
     const scene = sceneRef.current;
     const camera = cameraRef.current;
-    const isArMode = useMeasureStore.getState().isArMode;
 
-    if (isArMode && renderer) {
-      const reticle = new THREE.Mesh(
-        new THREE.RingGeometry(0.05, 0.06, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial()
-      );
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      scene.add(reticle);
+    const reticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.05, 0.06, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial()
+    );
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    scene.add(reticle);
 
-      let hitTestSource: XRHitTestSource | null = null;
+    let hitTestSource: XRHitTestSource | null = null;
+    renderer.xr.getSession()?.requestReferenceSpace('viewer').then(viewerSpace => {
+        renderer.xr.getSession()?.requestHitTestSource({ space: viewerSpace }).then(source => {
+            hitTestSource = source;
+        });
+    });
 
-      renderer.xr.getSession()?.requestReferenceSpace('viewer').then(viewerSpace => {
-          renderer.xr.getSession()?.requestHitTestSource({ space: viewerSpace }).then(source => {
-              hitTestSource = source;
-          });
-      });
+    const renderLoop = (timestamp: number, frame: XRFrame) => {
+      if (!frame || !renderer.xr.isPresenting) return;
 
-      const renderLoop = (timestamp: number, frame: XRFrame) => {
-        if (!frame || !renderer || !renderer.xr.isPresenting) return;
+      const referenceSpace = renderer.xr.getReferenceSpace();
+      if (!referenceSpace) return;
 
-        const referenceSpace = renderer.xr.getReferenceSpace();
-        if (!referenceSpace) return;
+      if (hitTestSource) {
+        const hitTestResults = frame.getHitTestResults(hitTestSource);
+        if (hitTestResults.length > 0) {
+          const hit = hitTestResults[0];
+          const pose = hit.getPose(referenceSpace);
+          if (pose) {
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+            setIsPlaneDetected(true);
 
-        if (hitTestSource) {
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-          if (hitTestResults.length > 0) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(referenceSpace);
-            if (pose) {
-              reticle.visible = true;
-              reticle.matrix.fromArray(pose.transform.matrix);
-              setIsPlaneDetected(true);
-
-              if (isTapping) {
-                const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-                if (points3d.length >= 2) {
-                  clearPoints();
-                }
-                addPoint3d({ x: point.x, y: point.y, z: point.z });
-                setIsTapping(false);
-              }
+            if (isTapping) {
+              const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+              if (points3d.length >= 2) clearPoints();
+              addPoint3d({ x: point.x, y: point.y, z: point.z });
+              setIsTapping(false);
             }
-          } else {
-            reticle.visible = false;
-            setIsPlaneDetected(false);
           }
+        } else {
+          reticle.visible = false;
+          setIsPlaneDetected(false);
         }
-        renderer.render(scene, camera);
-      };
+      }
+      renderer.render(scene, camera);
+    };
 
-      renderer.setAnimationLoop(renderLoop);
+    renderer.setAnimationLoop(renderLoop);
 
-      return () => {
-        scene.remove(reticle);
-        if(rendererRef.current){
-            rendererRef.current.setAnimationLoop(null);
-        }
-      };
-    }
-  }, [useMeasureStore.getState().isArMode, isTapping, addPoint3d, clearPoints, points3d.length, setIsPlaneDetected]);
+    return () => {
+      scene.remove(reticle);
+      if (rendererRef.current) {
+          rendererRef.current.setAnimationLoop(null);
+      }
+    };
+  }, [xrSession, isTapping, addPoint3d, clearPoints, points3d.length]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -195,6 +165,15 @@ const MeasurePage: React.FC = () => {
     }
   }, [points3d]);
 
+  const getInstructionText = () => {
+    if (!xrSession) return null;
+    if (arError) return `エラー: ${arError}`;
+    if (!isPlaneDetected) return "AR: デバイスを動かして周囲の平面を検出してください。";
+    if (points3d.length === 0) return "AR: 平面が検出されました。計測の始点をタップしてください。";
+    if (points3d.length === 1) return "AR: 計測の終点をタップしてください。";
+    return null;
+  };
+
   return (
     <div className="relative w-full h-screen" onClick={handleCanvasClick}>
       <video
@@ -203,9 +182,38 @@ const MeasurePage: React.FC = () => {
         autoPlay
         muted
         playsInline
-        style={{ display: useMeasureStore.getState().isArMode ? 'none' : 'block' }}
+        style={{ display: xrSession ? 'none' : 'block' }}
       />
       <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full z-0" />
+      <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded z-10 pointer-events-auto">
+        <h1 className="text-xl font-bold">計測モード</h1>
+        <p className="text-orange-500 text-sm mb-2">{getInstructionText()}</p>
+        {measurement?.valueMm && (
+          <p className="text-lg">{formatMeasurement(measurement.valueMm, unit)}</p>
+        )}
+        {isWebXrSupported && !xrSession && (
+          <button
+            className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+            onClick={(e) => { e.stopPropagation(); startARSession(); }}
+          >
+            AR計測を開始
+          </button>
+        )}
+        {!xrSession && (
+            <button
+                className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                onClick={(e) => { e.stopPropagation(); toggleCameraFacingMode(); }}
+            >
+                カメラ切り替え ({facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
+            </button>
+        )}
+        <button
+          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          onClick={(e) => { e.stopPropagation(); clearPoints(); }}
+        >
+          リセット
+        </button>
+      </div>
     </div>
   );
 };
