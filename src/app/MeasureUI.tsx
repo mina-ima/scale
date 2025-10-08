@@ -11,10 +11,10 @@ const MeasureUI: React.FC = () => {
     isPlaneDetected,
     arError,
     isWebXrSupported,
+    facingMode,
     clearPoints,
     startARSession,
-    toggleCameraFacingMode,
-    facingMode,
+    setCameraToggleRequested,
   } = useMeasureStore(state => ({
       points3d: state.points3d,
       measurement: state.measurement,
@@ -23,10 +23,10 @@ const MeasureUI: React.FC = () => {
       isPlaneDetected: state.isPlaneDetected,
       arError: state.arError,
       isWebXrSupported: state.isWebXrSupported,
+      facingMode: state.facingMode,
       clearPoints: state.clearPoints,
       startARSession: () => state.setIsArMode(true),
-      toggleCameraFacingMode: state.toggleCameraFacingMode,
-      facingMode: state.facingMode,
+      setCameraToggleRequested: state.setCameraToggleRequested,
   }));
 
   const getInstructionText = () => {
@@ -57,7 +57,7 @@ const MeasureUI: React.FC = () => {
         {!isArMode && (
             <button
                 className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                onClick={(e) => { e.stopPropagation(); toggleCameraFacingMode(); }}
+                onClick={(e) => { e.stopPropagation(); setCameraToggleRequested(true); }}
             >
                 カメラ切り替え ({facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
             </button>

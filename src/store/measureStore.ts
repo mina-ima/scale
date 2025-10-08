@@ -25,9 +25,10 @@ export interface MeasureState {
   setIsArMode: (isArMode: boolean) => void;
   setIsPlaneDetected: (isPlaneDetected: boolean) => void;
   setArError: (error: string | null) => void;
-  toggleCameraFacingMode: () => void;
   setWebXrSupported: (isSupported: boolean) => void;
   setFacingMode: (facingMode: 'user' | 'environment') => void;
+  cameraToggleRequested: boolean;
+  setCameraToggleRequested: (requested: boolean) => void;
 }
 
 export const useMeasureStore = create<MeasureState>((set) => ({
@@ -43,6 +44,7 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   arError: null,
   isWebXrSupported: false,
   facingMode: 'environment',
+  cameraToggleRequested: false,
   setMeasureMode: (mode) => set({ measureMode: mode }),
   setScale: (scale) => set({ scale }),
   setError: (error) => set({ error }),
@@ -55,9 +57,9 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   setIsArMode: (isArMode) => set({ isArMode }),
   setIsPlaneDetected: (isPlaneDetected) => set({ isPlaneDetected }),
   setArError: (arError) => set({ arError }),
-  toggleCameraFacingMode: () => { console.warn('toggleCameraFacingMode not implemented')},
   setWebXrSupported: (isSupported) => set({ isWebXrSupported: isSupported }),
   setFacingMode: (facingMode) => set({ facingMode }),
+  setCameraToggleRequested: (requested) => set({ cameraToggleRequested: requested }),
 }));
 
 // Expose useMeasureStore for Playwright tests

@@ -20,13 +20,27 @@ const MeasurePage: React.FC = () => {
     setIsArMode,
     setIsPlaneDetected,
     setArError,
+    setFacingMode,
   } = useMeasureStore();
 
   const { stream, startCamera, toggleCameraFacingMode, facingMode } = useCamera();
 
   useEffect(() => {
-    useMeasureStore.setState({ toggleCameraFacingMode, facingMode });
-  }, [toggleCameraFacingMode, facingMode]);
+    setFacingMode(facingMode);
+  }, [facingMode, setFacingMode]);
+
+  // Listen for external command to toggle camera
+  useEffect(() => {
+      const unsubscribe = useMeasureStore.subscribe(
+          (state, prevState) => {
+              if (state.cameraToggleRequested && !prevState.cameraToggleRequested) {
+                  toggleCameraFacingMode();
+                  useMeasureStore.setState({ cameraToggleRequested: false });
+              }
+          }
+      );
+      return unsubscribe;
+  }, [toggleCameraFacingMode]);
 
   useEffect(() => {
     if (stream && videoRef.current) {
