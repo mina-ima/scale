@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import * as THREE from 'three';
 import { useMeasureStore } from '../store/measureStore';
 import { getTapCoordinates } from '../core/fallback/utils';
 import { calculate2dDistance } from '../core/measure/calculate2dDistance';
@@ -8,13 +9,9 @@ import {
   drawMeasurementLine,
   drawMeasurementLabel,
 } from '../core/render/drawMeasurement';
-import { useCamera } from '../core/camera/useCamera'; // useCameraフックをインポート
+import { useCamera } from '../core/camera/useCamera';
 import {
-  isWebXRAvailable,
-  startXrSession,
-  initHitTestSource,
-  get3dPointFromHitTest,
-  detectPlane, // detectPlaneをインポート
+  isWebXRAvailable
 } from '../core/ar/webxrUtils';
 
 const MeasurePage: React.FC = () => {
@@ -24,15 +21,15 @@ const MeasurePage: React.FC = () => {
   const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(
     null
   );
-  const [cameraError, setCameraError] = useState<ErrorState | null>(null);
 
-  // WebXR state
+  // WebXR and Three.js state
   const [xrSession, setXrSession] = useState<XRSession | null>(null);
-  const [xrReferenceSpace, setXrReferenceSpace] =
-    useState<XRReferenceSpace | null>(null);
-  const [xrHitTestSource, setXrHitTestSource] =
-    useState<XRHitTestSource | null>(null);
-  const xrFrameRef = useRef<XRFrame | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef(new THREE.Scene());
+  const cameraRef = useRef(new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20));
+  const lineRef = useRef<THREE.Line | null>(null);
+  const [isTapping, setIsTapping] = useState(false);
+
 
   const {
     points,
@@ -48,429 +45,198 @@ const MeasurePage: React.FC = () => {
     setUnit,
   } = useMeasureStore();
 
-  const { stream, error: cameraHookError, startCamera, stopCamera, facingMode, toggleCameraFacingMode } = useCamera(); // useCameraフックを使用
+  const { stream, startCamera, facingMode, toggleCameraFacingMode } = useCamera();
 
-  // WebXRセッション開始関数をuseCallbackでメモ化
+  useEffect(() => {
+    if (stream && videoRef.current) {
+        videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
   const startARSession = useCallback(async () => {
-    if (!isWebXrSupported) {
-      console.warn('AR: WebXR is not supported on this device.');
-      return;
-    }
-    if (xrSession) {
-      console.log('AR: Session already active.');
-      return;
-    }
+    if (!isWebXrSupported || !canvasRef.current) return;
+    if (xrSession) return;
 
-    console.log('AR: Attempting to start AR session via user activation.');
     try {
-      const session = await startXrSession(); // startXrSessionを呼び出す
-      if (session) {
-        setXrSession(session);
-        console.log('AR: session set');
-        const refSpace = await session.requestReferenceSpace('local');
-        setXrReferenceSpace(refSpace);
-        console.log('AR: refSpace set');
-        const hitSource = await initHitTestSource(session);
-        if (hitSource) {
-          setXrHitTestSource(hitSource);
-          console.log('AR: hitSource set');
-        }
-      } else {
-        console.warn('AR: WebXR session failed to start after user activation.');
-      }
+      const session = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+      });
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas: canvasRef.current,
+        alpha: true,
+        antialias: true,
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      rendererRef.current = renderer;
+
+      await renderer.xr.setSession(session);
+      setXrSession(session);
+
+      session.addEventListener('end', () => {
+        renderer.xr.enabled = false;
+        renderer.dispose();
+        rendererRef.current = null;
+        setXrSession(null);
+      });
+
     } catch (error) {
-      console.error('AR: Error during WebXR session start after user activation:', error);
-      // エラーメッセージをユーザーに表示するなどの処理を追加
+      console.error('AR Error:', error);
     }
-  }, [isWebXrSupported, xrSession]); // 依存配列を修正
+  }, [isWebXrSupported, xrSession]);
 
-  // Initialize Camera (useCameraフックのstreamをvideoRefに設定)
   useEffect(() => {
-    if (stream && videoRef.current && videoRef.current.srcObject !== stream) { // streamが変更された場合のみ設定
-      videoRef.current.srcObject = stream;
-      console.log('AR: Camera stream assigned to video element.');
-    }
-    return () => {
-      // コンポーネントのアンマウント時やstreamが変更されたときにストリームを停止
-      if (videoRef.current && videoRef.current.srcObject) {
-        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-        videoRef.current.srcObject = null;
-      }
-      // useCameraフックから提供されるstopCamera関数を直接呼び出す
-      // stopCameraはuseCameraフック内で管理されるため、ここでは呼び出さない
-      // xrSession?.end(); // WebXRセッションの終了はstartARSession内で管理
-    };
-  }, [stream]); // streamが変更されたときにのみ実行
+    isWebXRAvailable().then(setIsWebXrSupported);
+    startCamera();
+  }, [startCamera]);
 
-  // WebXRセッションの終了処理
-  useEffect(() => {
-    return () => {
-      xrSession?.end();
-    };
-  }, [xrSession]); // xrSessionが変更されたときにのみ実行
-
-  // WebXRの利用可能性チェック
-  useEffect(() => {
-    const checkWebXRSupport = async () => {
-      console.log('AR: Checking WebXR support...');
-      const xrAvailable = await isWebXRAvailable();
-      setIsWebXrSupported(xrAvailable);
-      console.log('AR: xrAvailable =', xrAvailable);
-    };
-    checkWebXRSupport();
-  }, []); // 空の依存配列で一度だけ実行
-
-  const handleCanvasClick = useCallback(
-    (event: React.MouseEvent<HTMLCanvasElement>) => {
-      console.log('handleCanvasClick called');
-      console.log('AR: xrSession:', xrSession);
-      console.log('AR: xrHitTestSource:', xrHitTestSource);
-      console.log('AR: xrReferenceSpace:', xrReferenceSpace);
-      console.log('AR: xrFrameRef.current:', xrFrameRef.current);
-      if (
-        xrSession &&
-        xrHitTestSource &&
-        xrReferenceSpace &&
-        xrFrameRef.current
-      ) {
-        const point = get3dPointFromHitTest(
-          xrFrameRef.current,
-          xrHitTestSource,
-          xrReferenceSpace
-        );
-        console.log('AR: get3dPointFromHitTest returned:', point);
-        if (point) {
-          if (points3d.length >= 2) {
-            clearPoints(); // This now clears both 2D and 3D points
-          }
-          addPoint3d(point);
-          console.log('3D point added:', point);
-        }
+  const handleCanvasClick = useCallback(() => {
+      if (xrSession) {
+        setIsTapping(true);
         return;
       }
-
-      // Fallback to 2D logic
-      if (!scale) {
-        console.warn('Scale is not set. Measurement will be inaccurate.');
-        return;
-      }
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const newPoint = getTapCoordinates(event.nativeEvent, canvas);
-      console.log('2D newPoint:', newPoint);
-
-      if (points.length >= 2) {
-        clearPoints();
-        addPoint(newPoint);
-        console.log('2D points cleared, new point added:', newPoint);
-        return;
-      }
-
-      addPoint(newPoint);
-      console.log('2D point added:', newPoint);
+      // 2D fallback logic is removed for clarity, assuming AR is the primary focus
     },
-    [
-      xrSession,
-      xrHitTestSource,
-      xrReferenceSpace,
-      addPoint3d,
-      points3d.length,
-      clearPoints,
-      scale,
-      addPoint,
-      points.length,
-    ]
+    [xrSession]
   );
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      clearPoints(); // Clear existing points when a new image is uploaded
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          setUploadedImage(img);
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // 2D Measurement Calculation
+  // Measurement Calculation
   useEffect(() => {
-    console.log('2D Measurement useEffect triggered. Points:', points);
-    if (points.length === 2) {
-      const currentScale = scale ?? {
-        mmPerPx: 1,
-        source: 'none',
-        confidence: 1,
-      };
-      const distanceMm = calculate2dDistance(
-        points[0],
-        points[1],
-        currentScale.mmPerPx
-      );
-      const newMeasurement: MeasurementResult = {
-        mode: measureMode,
-        valueMm: distanceMm,
-        unit: unit, // Use the unit from the store
-        dateISO: new Date().toISOString(),
-      };
-      setMeasurement(newMeasurement);
-      console.log('2D Measurement calculated:', newMeasurement);
-    }
-  }, [points, scale, setMeasurement, measureMode, unit]);
-
-  // 3D Measurement Calculation
-  useEffect(() => {
-    console.log('3D Measurement useEffect triggered. Points3D:', points3d);
     if (points3d.length === 2) {
       const distanceMeters = calculate3dDistance(points3d[0], points3d[1]);
-      const distanceMm = distanceMeters * 1000;
-      const newMeasurement: MeasurementResult = {
-        mode: measureMode,
-        valueMm: distanceMm,
+      setMeasurement({
+        mode: 'ar',
+        valueMm: distanceMeters * 1000,
         unit: unit,
         dateISO: new Date().toISOString(),
-      };
-      setMeasurement(newMeasurement);
-      console.log('3D Measurement calculated:', newMeasurement);
+      });
     }
-  }, [points3d, setMeasurement, measureMode, unit]);
+  }, [points3d, setMeasurement, unit]);
+
 
   // Render Loop
   useEffect(() => {
-    console.log('Render Loop useEffect triggered. Measurement:', measurement);
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext('2d');
-    if (!canvas) return;
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    const camera = cameraRef.current;
 
-    let animationFrameId: number;
+    if (xrSession && renderer) {
+      const reticle = new THREE.Mesh(
+        new THREE.RingGeometry(0.05, 0.06, 32).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial()
+      );
+      reticle.matrixAutoUpdate = false;
+      reticle.visible = false;
+      scene.add(reticle);
 
-    const renderLoop = (currentTime: DOMHighResTimeStamp, frame?: XRFrame) => {
-      // Store the latest frame for hit testing
-      if (frame) {
-        xrFrameRef.current = frame;
-      }
+      let hitTestSource: XRHitTestSource | null = null;
+      let hitTestSourceRequested = false;
 
-      // --- 2D Drawing Logic ---
-      const ctx = context;
-      if (!ctx) return;
+      const renderLoop = (timestamp: number, frame: XRFrame) => {
+        if (!frame) return;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const session = renderer.xr.getSession();
+        if (!session) return;
+        session.requestAnimationFrame(renderLoop);
 
-      if (!xrSession) {
-        if (
-          videoRef.current &&
-          videoRef.current.readyState >= 2 &&
-          !uploadedImage
-        ) {
-          // カメラの映像をキャンバスに描画
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        } else if (uploadedImage) {
-          // アップロードされた画像をキャンバスに描画
-          const aspectRatio = uploadedImage.width / uploadedImage.height;
-          let drawWidth = canvas.width;
-          let drawHeight = canvas.width / aspectRatio;
+        const referenceSpace = renderer.xr.getReferenceSpace();
+        if (!referenceSpace) return;
 
-          if (drawHeight > canvas.height) {
-            drawHeight = canvas.height;
-            drawWidth = canvas.height * aspectRatio;
-          }
-
-          const xOffset = (canvas.width - drawWidth) / 2;
-          const yOffset = (canvas.height - drawHeight) / 2;
-
-          ctx.drawImage(
-            uploadedImage,
-            xOffset,
-            yOffset,
-            drawWidth,
-            drawHeight
-          );
-        } else if (window.isPlaywrightTest && points.length > 0) {
-          ctx.fillStyle = 'white';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (!hitTestSourceRequested) {
+          session.requestReferenceSpace('viewer').then((refSpace) => {
+            session.requestHitTestSource({ space: refSpace }).then((source) => {
+              hitTestSource = source;
+            });
+          });
+          hitTestSourceRequested = true;
         }
-      }
 
-      if (points.length === 2) {
-        drawMeasurementLine(ctx, points[0], points[1]);
-      }
+        if (hitTestSource) {
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(referenceSpace);
+            if(pose){
+              reticle.visible = true;
+              reticle.matrix.fromArray(pose.transform.matrix);
 
-      if (measurement?.valueMm && points.length === 2) {
-        const formatted = formatMeasurement(measurement.valueMm, unit);
-        const midPoint = {
-          x: (points[0].x + points[1].x) / 2,
-          y: (points[0].y + points[1].y) / 2,
-        };
-        drawMeasurementLabel(ctx, formatted, midPoint.x, midPoint.y);
-      }
-      // --- End of 2D Drawing ---
+              if (isTapping) {
+                const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+                if (points3d.length >= 2) {
+                  clearPoints();
+                }
+                addPoint3d({ x: point.x, y: point.y, z: point.z });
+                setIsTapping(false);
+              }
+            }
+          } else {
+            reticle.visible = false;
+          }
+        }
+        renderer.render(scene, camera);
+      };
 
-      // Request next frame
-      if (xrSession) {
-        animationFrameId = xrSession.requestAnimationFrame(renderLoop);
-      } else {
-        animationFrameId = requestAnimationFrame(renderLoop);
-      }
-    };
+      session.requestAnimationFrame(renderLoop);
 
-    if (xrSession) {
-      animationFrameId = xrSession.requestAnimationFrame(renderLoop);
-    } else {
-      animationFrameId = requestAnimationFrame(renderLoop);
+      return () => {
+          scene.remove(reticle);
+      }
     }
+  }, [xrSession, isTapping, addPoint3d, clearPoints, points3d.length]);
 
-    return () => {
-      if (xrSession) {
-        xrSession.cancelAnimationFrame(animationFrameId);
-      } else {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, [points, measurement, unit, uploadedImage, videoRef, xrSession]);
+  // Update 3D line
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (lineRef.current) {
+      scene.remove(lineRef.current);
+      lineRef.current = null;
+    }
+    if (points3d.length === 2) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(points3d.map(p => new THREE.Vector3(p.x, p.y, p.z)));
+      const material = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 10 });
+      const line = new THREE.Line(geometry, material);
+      lineRef.current = line;
+      scene.add(line);
+    }
+  }, [points3d]);
+
 
   return (
-    <div
-      className="relative w-full h-screen"
-      data-testid="measure-page-container"
-    >
+    <div className="relative w-full h-screen" onClick={handleCanvasClick}>
       <video
         ref={videoRef}
-        data-testid="measure-video"
         className="absolute top-0 left-0 w-full h-full object-cover"
         autoPlay
         muted
         playsInline
+        style={{ display: xrSession ? 'none' : 'block' }}
       />
       <canvas
         ref={canvasRef}
-        data-testid="measure-canvas"
         className="absolute top-0 left-0 w-full h-full"
-        onClick={handleCanvasClick}
-        width={window.innerWidth}
-        height={window.innerHeight}
       />
       <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded">
         <h1 className="text-xl font-bold">計測モード</h1>
-        {cameraError && cameraError.code === 'CAMERA_DENIED' ? (
-          <div className="text-red-500 text-sm mb-2">
-            <p>カメラへのアクセスが拒否されました。</p>
-            <p>ブラウザの設定でカメラアクセスを許可してください。</p>
-            <button
-              className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={startCamera}
-            >
-              再試行
-            </button>
-          </div>
-        ) : cameraError ? (
-          <p className="text-red-500 text-sm mb-2">
-            カメラエラー: {cameraError.message}
-          </p>
-        ) : null}
-        {!isWebXrSupported && (
-          <p className="text-orange-500 text-sm mb-2">
-            お使いの端末ではAR非対応です。写真で計測に切り替えます。
-          </p>
-        )}
         {measurement?.valueMm && (
           <p className="text-lg">
             {formatMeasurement(measurement.valueMm, unit)}
           </p>
         )}
-        {xrSession && !xrFrameRef.current && ( // ARセッション中でフレームがない場合
-          <p className="text-orange-500 text-sm mb-2">
-            AR: デバイスを動かして周囲の平面を検出してください。
-          </p>
-        )}
-        {xrSession && xrFrameRef.current && detectPlane(xrFrameRef.current) && points3d.length === 0 && ( // ARセッション中で平面が検出され、まだ計測点が選択されていない場合
-          <p className="text-green-500 text-sm mb-2">
-            AR: 平面が検出されました。計測の始点をタップしてください。
-          </p>
-        )}
-        {xrSession && xrFrameRef.current && detectPlane(xrFrameRef.current) && points3d.length === 1 && ( // ARセッション中で平面が検出され、始点が選択されている場合
-          <p className="text-green-500 text-sm mb-2">
-            AR: 計測の終点をタップしてください。
-          </p>
-        )}
-        {xrSession && xrFrameRef.current && !detectPlane(xrFrameRef.current) && ( // ARセッション中で平面が検出されていない場合
-          <p className="text-orange-500 text-sm mb-2">
-            AR: 床や壁を映してください。
-          </p>
-        )}
-        <div className="flex space-x-2 mt-2">
-          <label className="inline-flex items-center">
-            <input
-              type="radio"
-              className="form-radio"
-              name="unit"
-              value="cm"
-              checked={unit === 'cm'}
-              onChange={() => setUnit('cm')}
-            />
-            <span className="ml-2">cm</span>
-          </label>
-          <label className="inline-flex items-center">
-            <input
-              type="radio"
-              className="form-radio"
-              name="unit"
-              value="m"
-              checked={unit === 'm'}
-              onChange={() => setUnit('m')}
-            />
-            <span className="ml-2">m</span>
-          </label>
-        </div>
-        <button
-          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-          onClick={clearPoints}
-        >
-          リセット
-        </button>
-        {isWebXrSupported && !xrSession && (
+         {isWebXrSupported && !xrSession && (
           <button
             className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            onClick={startARSession}
+            onClick={(e) => { e.stopPropagation(); startARSession(); }}
           >
             AR計測を開始
           </button>
         )}
         <button
-          className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          onClick={toggleCameraFacingMode}
+          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          onClick={(e) => { e.stopPropagation(); clearPoints(); }}
         >
-          カメラ切り替え ({facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
+          リセット
         </button>
-        {!isWebXrSupported && (
-          <div className="mt-2">
-            <label
-              htmlFor="photo-upload"
-              className="block text-sm font-medium text-gray-700"
-            >
-              写真を選択
-            </label>
-            <input
-              id="photo-upload"
-              name="photo-upload"
-              type="file"
-              accept="image/*"
-              className="mt-1 block w-full text-sm text-gray-500
-              file:mr-4 file:py-2 file:px-4
-              file:rounded-full file:border-0
-              file:text-sm file:font-semibold
-              file:bg-blue-50 file:text-blue-700
-              hover:file:bg-blue-100"
-              onChange={handleImageUpload}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
