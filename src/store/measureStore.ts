@@ -9,6 +9,11 @@ export interface MeasureState {
   points3d: Point3D[];
   measurement: MeasurementResult | null;
   unit: 'cm' | 'm';
+  isArMode: boolean;
+  isPlaneDetected: boolean;
+  arError: string | null;
+  isWebXrSupported: boolean;
+  facingMode: 'user' | 'environment';
   setMeasureMode: (mode: MeasureMode) => void;
   setScale: (scale: ScaleEstimation | null) => void;
   setError: (error: ErrorState | null) => void;
@@ -17,6 +22,12 @@ export interface MeasureState {
   clearPoints: () => void;
   setMeasurement: (measurement: MeasurementResult | null) => void;
   setUnit: (unit: 'cm' | 'm') => void;
+  setIsArMode: (isArMode: boolean) => void;
+  setIsPlaneDetected: (isPlaneDetected: boolean) => void;
+  setArError: (error: string | null) => void;
+  toggleCameraFacingMode: () => void;
+  setWebXrSupported: (isSupported: boolean) => void;
+  setFacingMode: (facingMode: 'user' | 'environment') => void;
 }
 
 export const useMeasureStore = create<MeasureState>((set) => ({
@@ -27,6 +38,11 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   points3d: [],
   measurement: null,
   unit: 'cm',
+  isArMode: false,
+  isPlaneDetected: false,
+  arError: null,
+  isWebXrSupported: false,
+  facingMode: 'environment',
   setMeasureMode: (mode) => set({ measureMode: mode }),
   setScale: (scale) => set({ scale }),
   setError: (error) => set({ error }),
@@ -36,6 +52,12 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   clearPoints: () => set({ points: [], points3d: [], measurement: null }),
   setMeasurement: (measurement) => set({ measurement }),
   setUnit: (unit) => set({ unit }),
+  setIsArMode: (isArMode) => set({ isArMode }),
+  setIsPlaneDetected: (isPlaneDetected) => set({ isPlaneDetected }),
+  setArError: (arError) => set({ arError }),
+  toggleCameraFacingMode: () => { console.warn('toggleCameraFacingMode not implemented')},
+  setWebXrSupported: (isSupported) => set({ isWebXrSupported: isSupported }),
+  setFacingMode: (facingMode) => set({ facingMode }),
 }));
 
 // Expose useMeasureStore for Playwright tests
