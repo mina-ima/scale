@@ -180,14 +180,14 @@ const MeasurePage: React.FC = () => {
     <div className="relative w-full h-screen" onClick={handleCanvasClick}>
       <video
         ref={videoRef}
-        className="absolute top-0 left-0 w-full h-full object-cover"
+        className="absolute top-0 left-0 w-full h-full object-cover z-[-1]"
         autoPlay
         muted
         playsInline
         style={{ display: xrSession ? 'none' : 'block' }}
       />
-      <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />
-      <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded">
+      <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full z-0" />
+      <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded z-10">
         <h1 className="text-xl font-bold">計測モード</h1>
         <p className="text-orange-500 text-sm mb-2">{getInstructionText()}</p>
         {measurement?.valueMm && (
