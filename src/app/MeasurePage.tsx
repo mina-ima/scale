@@ -104,10 +104,16 @@ const MeasurePage: React.FC = () => {
     initializeCamera();
 
     return () => {
+      // コンポーネントのアンマウント時やstreamが変更されたときにストリームを停止
+      if (videoRef.current && videoRef.current.srcObject) {
+        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      // useCameraフックから提供されるstopCamera関数を直接呼び出す
       stopCamera();
-      // xrSession?.end(); // WebXRセッションの終了はstartARSession内で管理
+      xrSession?.end(); // xrSessionの終了もここで行う
     };
-  }, [startCamera, stopCamera]); // 依存配列を修正
+  }, [stream, stopCamera, xrSession]); // stopCameraを依存配列に追加
 
   // WebXRの利用可能性チェック
   useEffect(() => {
