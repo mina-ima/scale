@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useMeasureStore } from '../store/measureStore';
 import { calculate3dDistance } from '../core/measure/calculate3dDistance';
