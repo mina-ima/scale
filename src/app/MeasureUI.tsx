@@ -61,6 +61,10 @@ const MeasureUI: React.FC = () => {
   );
 
   const overlayRoot = document.getElementById('ar-overlay');
+  if (!overlayRoot) {
+    console.error('DOM element with id "ar-overlay" not found. UI will not be rendered.');
+    return null; // overlayRoot が見つからない場合は何もレンダリングしない
+  }
   return overlayRoot ? createPortal(uiContent, overlayRoot) : null;
 };
 
