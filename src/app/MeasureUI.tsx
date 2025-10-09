@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useMeasureStore } from '../store/measureStore';
 import { formatMeasurement } from '../core/measure/format';
 
@@ -13,21 +13,9 @@ const MeasureUI: React.FC = () => {
     isWebXrSupported,
     facingMode,
     clearPoints,
-    startARSession,
+    setIsArMode,
     setCameraToggleRequested,
-  } = useMeasureStore(state => ({
-      points3d: state.points3d,
-      measurement: state.measurement,
-      unit: state.unit,
-      isArMode: state.isArMode,
-      isPlaneDetected: state.isPlaneDetected,
-      arError: state.arError,
-      isWebXrSupported: state.isWebXrSupported,
-      facingMode: state.facingMode,
-      clearPoints: state.clearPoints,
-      startARSession: () => state.setIsArMode(true),
-      setCameraToggleRequested: state.setCameraToggleRequested,
-  }));
+  } = useMeasureStore();
 
   const getInstructionText = () => {
     if (!isArMode) return null;
@@ -38,7 +26,7 @@ const MeasureUI: React.FC = () => {
     return null;
   };
 
-  return (
+  const uiContent = (
     <div className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none">
       <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded pointer-events-auto">
         <h1 className="text-xl font-bold">計測モード</h1>
@@ -49,7 +37,7 @@ const MeasureUI: React.FC = () => {
         {isWebXrSupported && !isArMode && (
           <button
             className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            onClick={(e) => { e.stopPropagation(); startARSession(); }}
+            onClick={(e) => { e.stopPropagation(); setIsArMode(true); }}
           >
             AR計測を開始
           </button>
@@ -71,6 +59,9 @@ const MeasureUI: React.FC = () => {
       </div>
     </div>
   );
+
+  const overlayRoot = document.getElementById('ar-overlay');
+  return overlayRoot ? createPortal(uiContent, overlayRoot) : null;
 };
 
 export default MeasureUI;

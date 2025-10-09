@@ -1,28 +1,26 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useMeasureStore } from '../store/measureStore';
 import { calculate3dDistance } from '../core/measure/calculate3dDistance';
-import { formatMeasurement } from '../core/measure/format';
 import { useCamera } from '../core/camera/useCamera';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
+import MeasureUI from './MeasureUI';
 
 const MeasurePage: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [isWebXrSupported, setIsWebXrSupported] = useState(false);
-
-  // Component-local state for AR and UI
-  const [xrSession, setXrSession] = useState<XRSession | null>(null);
-  const [isPlaneDetected, setIsPlaneDetected] = useState(false);
-  const [arError, setArError] = useState<string | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef(new THREE.Scene());
   const cameraRef = useRef(new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20));
   const lineRef = useRef<THREE.Line | null>(null);
   const [isTapping, setIsTapping] = useState(false);
 
-  const { points3d, measurement, addPoint3d, clearPoints, setMeasurement, unit } = useMeasureStore();
-  const { stream, startCamera, facingMode, toggleCameraFacingMode } = useCamera();
+  const {
+    points3d, addPoint3d, clearPoints, setMeasurement, unit, xrSession, setXrSession,
+    setIsPlaneDetected, setArError, setIsWebXrSupported, setIsArMode
+  } = useMeasureStore();
+
+  const { stream, startCamera, facingMode, setFacingMode } = useCamera(useMeasureStore.getState().facingMode);
 
   useEffect(() => {
     if (stream && videoRef.current) {
@@ -36,10 +34,13 @@ const MeasurePage: React.FC = () => {
         setArError('お使いのデバイスはARに対応していません。');
         return;
     }
+    setIsArMode(true);
 
     try {
       const session = await navigator.xr.requestSession('immersive-ar', {
         requiredFeatures: ['hit-test', 'local-floor'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: document.getElementById('ar-overlay')! },
       });
 
       const renderer = new THREE.WebGLRenderer({
@@ -62,17 +63,19 @@ const MeasurePage: React.FC = () => {
         rendererRef.current = null;
         setXrSession(null);
         setIsPlaneDetected(false);
+        setIsArMode(false);
       });
     } catch (error) {
       console.error('AR Error:', error);
       setArError(error instanceof Error ? error.message : String(error));
+      setIsArMode(false);
     }
-  }, []);
+  }, [setArError, setIsArMode, setIsPlaneDetected, setXrSession]);
 
   useEffect(() => {
     isWebXRAvailable().then(setIsWebXrSupported);
     startCamera();
-  }, [startCamera]);
+  }, [startCamera, setIsWebXrSupported]);
 
   const handleCanvasClick = useCallback(() => {
     if (xrSession) {
@@ -148,7 +151,7 @@ const MeasurePage: React.FC = () => {
           rendererRef.current.setAnimationLoop(null);
       }
     };
-  }, [xrSession, isTapping, addPoint3d, clearPoints, points3d.length]);
+  }, [xrSession, isTapping, addPoint3d, clearPoints, points3d.length, setIsPlaneDetected]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -165,14 +168,13 @@ const MeasurePage: React.FC = () => {
     }
   }, [points3d]);
 
-  const getInstructionText = () => {
-    if (!xrSession) return null;
-    if (arError) return `エラー: ${arError}`;
-    if (!isPlaneDetected) return "AR: デバイスを動かして周囲の平面を検出してください。";
-    if (points3d.length === 0) return "AR: 平面が検出されました。計測の始点をタップしてください。";
-    if (points3d.length === 1) return "AR: 計測の終点をタップしてください。";
-    return null;
-  };
+  // This effect handles the startARSession call when isArMode becomes true.
+  useEffect(() => {
+    const { isArMode } = useMeasureStore.getState();
+    if (isArMode && !xrSession) {
+      startARSession();
+    }
+  }, [xrSession, startARSession]);
 
   return (
     <div className="relative w-full h-screen" onClick={handleCanvasClick}>
@@ -182,38 +184,9 @@ const MeasurePage: React.FC = () => {
         autoPlay
         muted
         playsInline
-        style={{ display: xrSession ? 'none' : 'block' }}
       />
       <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full z-0" />
-      <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded z-10 pointer-events-auto">
-        <h1 className="text-xl font-bold">計測モード</h1>
-        <p className="text-orange-500 text-sm mb-2">{getInstructionText()}</p>
-        {measurement?.valueMm && (
-          <p className="text-lg">{formatMeasurement(measurement.valueMm, unit)}</p>
-        )}
-        {isWebXrSupported && !xrSession && (
-          <button
-            className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            onClick={(e) => { e.stopPropagation(); startARSession(); }}
-          >
-            AR計測を開始
-          </button>
-        )}
-        {!xrSession && (
-            <button
-                className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                onClick={(e) => { e.stopPropagation(); toggleCameraFacingMode(); }}
-            >
-                カメラ切り替え ({facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
-            </button>
-        )}
-        <button
-          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-          onClick={(e) => { e.stopPropagation(); clearPoints(); }}
-        >
-          リセット
-        </button>
-      </div>
+      <MeasureUI />
     </div>
   );
 };
