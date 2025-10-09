@@ -66,10 +66,10 @@ const MeasurePage: React.FC = () => {
       await renderer.xr.setSession(session);
       setXrSession(session);
 
-      console.log('process.env.NODE_ENV:', process.env.NODE_ENV);
+      console.log('import.meta.env.MODE:', import.meta.env.MODE);
 
       // Debug: Force plane detection in development environment
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         setIsPlaneDetected(true);
         // Position reticle at a default location for debugging (e.g., near the center of the view)
         reticle.matrix.identity();
