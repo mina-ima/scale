@@ -57,6 +57,15 @@ const MeasurePage: React.FC = () => {
       await renderer.xr.setSession(session);
       setXrSession(session);
 
+      // Debug: Force plane detection in development environment
+      if (process.env.NODE_ENV === 'development') {
+        setIsPlaneDetected(true);
+        // Position reticle at a default location for debugging
+        reticle.matrix.identity();
+        reticle.matrix.makeTranslation(0, -1.0, -2.0); // Example position
+        reticle.visible = true;
+      }
+
       session.addEventListener('end', () => {
         renderer.xr.setAnimationLoop(null);
         renderer.dispose();
