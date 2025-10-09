@@ -17,16 +17,25 @@ const MeasurePage: React.FC = () => {
 
   const {
     points3d, addPoint3d, clearPoints, setMeasurement, unit, xrSession, setXrSession,
-    setIsPlaneDetected, setArError, setIsWebXrSupported, setIsArMode
+    setIsPlaneDetected, setArError, setIsWebXrSupported, setIsArMode,
+    cameraToggleRequested, setCameraToggleRequested
   } = useMeasureStore();
 
-  const { stream, startCamera, facingMode, setFacingMode } = useCamera(useMeasureStore.getState().facingMode);
+  const { stream, startCamera, toggleCameraFacingMode } = useCamera();
 
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  // Effect to handle camera toggle requests from MeasureUI
+  useEffect(() => {
+    if (cameraToggleRequested) {
+      toggleCameraFacingMode();
+      setCameraToggleRequested(false);
+    }
+  }, [cameraToggleRequested, toggleCameraFacingMode, setCameraToggleRequested]);
 
   const startARSession = useCallback(async () => {
     const isSupported = await isWebXRAvailable();
@@ -123,6 +132,15 @@ const MeasurePage: React.FC = () => {
             console.log('Hit test source requested successfully.', hitTestSource);
         }).catch(e => console.error('Failed to request hit test source:', e));
     }).catch(e => console.error('Failed to request viewer reference space:', e));
+
+    // Debug: Force plane detection in development environment
+    if (process.env.NODE_ENV === 'development') {
+      setIsPlaneDetected(true);
+      // Position reticle at a default location for debugging (e.g., near the center of the view)
+      reticle.matrix.identity();
+      reticle.matrix.makeTranslation(0, 0, -1.0); // Example: 1 meter in front of the camera
+      reticle.visible = true;
+    }
 
     const renderLoop = (timestamp: number, frame: XRFrame) => {
       if (!frame || !renderer.xr.isPresenting) return;

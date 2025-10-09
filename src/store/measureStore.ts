@@ -42,7 +42,6 @@ export interface MeasureState {
   isPlaneDetected: boolean;
   arError: string | null;
   isWebXrSupported: boolean;
-  facingMode: 'user' | 'environment';
   cameraToggleRequested: boolean;
 
   setMeasureMode: (mode: MeasureMode) => void;
@@ -58,7 +57,6 @@ export interface MeasureState {
   setIsPlaneDetected: (isPlaneDetected: boolean) => void;
   setArError: (error: string | null) => void;
   setIsWebXrSupported: (supported: boolean) => void;
-  setFacingMode: (mode: 'user' | 'environment') => void;
   setCameraToggleRequested: (requested: boolean) => void;
 }
 
@@ -75,7 +73,6 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   isPlaneDetected: false,
   arError: null,
   isWebXrSupported: false,
-  facingMode: 'environment',
   cameraToggleRequested: false,
 
   setMeasureMode: (mode) => set({ measureMode: mode }),
@@ -92,7 +89,6 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   setIsPlaneDetected: (isPlaneDetected) => set({ isPlaneDetected }),
   setArError: (error) => set({ arError: error }),
   setIsWebXrSupported: (supported) => set({ isWebXrSupported: supported }),
-  setFacingMode: (mode) => set({ facingMode: mode }),
   setCameraToggleRequested: (requested) => set({ cameraToggleRequested: requested }),
 }));
 
