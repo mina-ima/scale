@@ -109,8 +109,9 @@ const MeasurePage: React.FC = () => {
     renderer.xr.getSession()?.requestReferenceSpace('viewer').then(viewerSpace => {
         renderer.xr.getSession()?.requestHitTestSource({ space: viewerSpace }).then(source => {
             hitTestSource = source;
-        });
-    });
+            console.log('Hit test source requested successfully.', hitTestSource);
+        }).catch(e => console.error('Failed to request hit test source:', e));
+    }).catch(e => console.error('Failed to request viewer reference space:', e));
 
     const renderLoop = (timestamp: number, frame: XRFrame) => {
       if (!frame || !renderer.xr.isPresenting) return;
@@ -127,6 +128,7 @@ const MeasurePage: React.FC = () => {
             reticle.visible = true;
             reticle.matrix.fromArray(pose.transform.matrix);
             setIsPlaneDetected(true);
+            // console.log('Plane detected.'); // Log only when a plane is detected
 
             if (isTapping) {
               const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
@@ -138,7 +140,10 @@ const MeasurePage: React.FC = () => {
         } else {
           reticle.visible = false;
           setIsPlaneDetected(false);
+          // console.log('No plane detected.'); // Log only when no plane is detected
         }
+      } else {
+        console.log('Hit test source is null.');
       }
       renderer.render(scene, camera);
     };
