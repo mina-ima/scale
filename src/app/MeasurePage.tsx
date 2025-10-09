@@ -148,7 +148,11 @@ const MeasurePage: React.FC = () => {
       const referenceSpace = renderer.xr.getReferenceSpace();
       if (!referenceSpace) return;
 
-      if (hitTestSource) {
+      if (import.meta.env.MODE === 'development') {
+        // In development mode, always show reticle if AR session is active
+        reticle.visible = true;
+        setIsPlaneDetected(true);
+      } else if (hitTestSource) {
         const hitTestResults = frame.getHitTestResults(hitTestSource);
         if (hitTestResults.length > 0) {
           const hit = hitTestResults[0];
