@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Point } from '../core/fallback/utils';
+import { ScaleEstimation } from '../core/reference/ScaleEstimation'; // Import the correct ScaleEstimation
 
 // We need to define Point3D and other types used in the state
 // For now, let's use a basic interface.
@@ -10,24 +11,30 @@ export interface Point3D {
 }
 
 export interface MeasurementResult {
-    mode: 'ar' | 'fallback';
-    valueMm: number;
-    unit: 'cm' | 'm';
-    dateISO: string;
+  mode: MeasureMode; // Use MeasureMode for the measurement type
+  measurementMethod: 'ar' | 'fallback'; // New property to indicate AR or fallback
+  valueMm?: number;
+  unit: 'cm' | 'm';
+  dateISO: string;
 }
 
-export type MeasureMode = 'furniture' | 'growth';
+export type MeasureMode =
+  | 'furniture'
+  | 'growth-height'
+  | 'growth-foot'
+  | 'growth-hand'
+  | 'growth-weight';
 export type ErrorState = {
-    title: string;
-    message: string;
+  title: string;
+  message: string;
+  code?:
+    | 'CAMERA_DENIED'
+    | 'XR_UNAVAILABLE'
+    | 'PLANE_NOT_FOUND'
+    | 'SAVE_FAILED'
+    | 'UNKNOWN';
+  name: string;
 } | null;
-
-// This is a placeholder for the real ScaleEstimation type
-export interface ScaleEstimation {
-    scale: number;
-    referenceType: string;
-}
-
 
 export interface MeasureState {
   measureMode: MeasureMode;
@@ -43,6 +50,7 @@ export interface MeasureState {
   arError: string | null;
   isWebXrSupported: boolean;
   cameraToggleRequested: boolean;
+  facingMode: 'user' | 'environment';
 
   setMeasureMode: (mode: MeasureMode) => void;
   setScale: (scale: ScaleEstimation | null) => void;
@@ -74,13 +82,25 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   arError: null,
   isWebXrSupported: false,
   cameraToggleRequested: false,
+  facingMode: 'environment',
 
   setMeasureMode: (mode) => set({ measureMode: mode }),
   setScale: (scale) => set({ scale }),
   setError: (error) => set({ error }),
-  addPoint: (point) => set((state) => ({ points: [...state.points, point] })),
+  addPoint: (point) =>
+    set((state) => {
+      if (state.points.length >= 2) {
+        return { points: [point], points3d: [], measurement: null };
+      }
+      return { points: [...state.points, point] };
+    }),
   addPoint3d: (point) =>
-    set((state) => ({ points3d: [...state.points3d, point] })),
+    set((state) => {
+      if (state.points3d.length >= 2) {
+        return { points3d: [point], points: [], measurement: null };
+      }
+      return { points3d: [...state.points3d, point] };
+    }),
   clearPoints: () => set({ points: [], points3d: [], measurement: null }),
   setMeasurement: (measurement) => set({ measurement }),
   setUnit: (unit) => set({ unit }),
@@ -89,7 +109,8 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   setIsPlaneDetected: (isPlaneDetected) => set({ isPlaneDetected }),
   setArError: (error) => set({ arError: error }),
   setIsWebXrSupported: (supported) => set({ isWebXrSupported: supported }),
-  setCameraToggleRequested: (requested) => set({ cameraToggleRequested: requested }),
+  setCameraToggleRequested: (requested) =>
+    set({ cameraToggleRequested: requested }),
 }));
 
 // Expose useMeasureStore for Playwright tests

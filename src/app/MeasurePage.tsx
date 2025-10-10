@@ -11,14 +11,32 @@ const MeasurePage: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef(new THREE.Scene());
-  const cameraRef = useRef(new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20));
+  const cameraRef = useRef(
+    new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      20
+    )
+  );
   const lineRef = useRef<THREE.Line | null>(null);
+  const reticleRef = useRef<THREE.Mesh | null>(null);
   const [isTapping, setIsTapping] = useState(false);
 
   const {
-    points3d, addPoint3d, clearPoints, setMeasurement, unit, xrSession, setXrSession,
-    setIsPlaneDetected, setArError, setIsWebXrSupported, setIsArMode,
-    cameraToggleRequested, setCameraToggleRequested
+    points3d,
+    addPoint3d,
+    clearPoints,
+    setMeasurement,
+    unit,
+    xrSession,
+    setXrSession,
+    setIsPlaneDetected,
+    setArError,
+    setIsWebXrSupported,
+    setIsArMode,
+    cameraToggleRequested,
+    setCameraToggleRequested,
   } = useMeasureStore();
 
   const { stream, startCamera, toggleCameraFacingMode } = useCamera();
@@ -40,17 +58,23 @@ const MeasurePage: React.FC = () => {
   const startARSession = useCallback(async () => {
     const isSupported = await isWebXRAvailable();
     if (!isSupported || !canvasRef.current) {
-        setArError('お使いのデバイスはARに対応していません。');
-        return;
+      setArError('お使いのデバイスはARに対応していません。');
+      return;
     }
     setIsArMode(true);
 
     try {
-      const session = await navigator.xr.requestSession('immersive-ar', {
+      const session = await navigator.xr?.requestSession('immersive-ar', {
         requiredFeatures: ['hit-test', 'local-floor'],
         optionalFeatures: ['dom-overlay'],
         domOverlay: { root: document.getElementById('ar-overlay')! },
       });
+
+      if (!session) {
+        setArError('ARセッションの開始に失敗しました。');
+        setIsArMode(false);
+        return;
+      }
 
       const renderer = new THREE.WebGLRenderer({
         canvas: canvasRef.current,
@@ -72,9 +96,11 @@ const MeasurePage: React.FC = () => {
       if (import.meta.env.MODE === 'development') {
         setIsPlaneDetected(true);
         // Position reticle at a default location for debugging (e.g., near the center of the view)
-        reticle.matrix.identity();
-        reticle.matrix.makeTranslation(0, 0, -1.0); // Example: 1 meter in front of the camera
-        reticle.visible = true;
+        if (reticleRef.current) {
+          reticleRef.current.matrix.identity();
+          reticleRef.current.matrix.makeTranslation(0, 0, -1.0); // Example: 1 meter in front of the camera
+          reticleRef.current.visible = true;
+        }
       }
 
       session.addEventListener('end', () => {
@@ -106,7 +132,13 @@ const MeasurePage: React.FC = () => {
   useEffect(() => {
     if (points3d.length === 2) {
       const distanceMeters = calculate3dDistance(points3d[0], points3d[1]);
-      setMeasurement({ mode: 'ar', valueMm: distanceMeters * 1000, unit: unit, dateISO: new Date().toISOString() });
+      setMeasurement({
+        mode: 'furniture',
+        measurementMethod: 'ar',
+        valueMm: distanceMeters * 1000,
+        unit: unit,
+        dateISO: new Date().toISOString(),
+      });
     }
   }, [points3d, setMeasurement, unit]);
 
@@ -124,14 +156,40 @@ const MeasurePage: React.FC = () => {
     reticle.matrixAutoUpdate = false;
     reticle.visible = false;
     scene.add(reticle);
+    reticleRef.current = reticle;
 
     let hitTestSource: XRHitTestSource | null = null;
-    renderer.xr.getSession()?.requestReferenceSpace('viewer').then(viewerSpace => {
-        renderer.xr.getSession()?.requestHitTestSource({ space: viewerSpace }).then(source => {
-            hitTestSource = source;
-            console.log('Hit test source requested successfully.', hitTestSource);
-        }).catch(e => console.error('Failed to request hit test source:', e));
-    }).catch(e => console.error('Failed to request viewer reference space:', e));
+
+    (async () => {
+      const currentXrSession = renderer.xr.getSession();
+
+      if (!currentXrSession) return;
+
+      try {
+        const viewerSpace =
+          await currentXrSession.requestReferenceSpace('viewer');
+
+        const source = await currentXrSession.requestHitTestSource?.({
+          space: viewerSpace,
+        });
+
+        if (source) {
+          hitTestSource = source;
+
+          console.log(
+            'Hit test source requested successfully.',
+
+            hitTestSource
+          );
+        } else {
+          console.error(
+            'requestHitTestSource is not available in this session.'
+          );
+        }
+      } catch (e) {
+        console.error('Failed to request hit test source:', e);
+      }
+    })();
 
     // Debug: Force plane detection in development environment
     if (process.env.NODE_ENV === 'development') {
@@ -150,46 +208,62 @@ const MeasurePage: React.FC = () => {
 
       if (import.meta.env.MODE === 'development') {
         // In development mode, always show reticle if AR session is active
-        reticle.visible = true;
+        if (reticleRef.current) {
+          reticleRef.current.visible = true;
+        }
         setIsPlaneDetected(true);
       } else if (hitTestSource) {
         const hitTestResults = frame.getHitTestResults(hitTestSource);
         if (hitTestResults.length > 0) {
           const hit = hitTestResults[0];
           const pose = hit.getPose(referenceSpace);
-          if (pose) {
-            reticle.visible = true;
-            reticle.matrix.fromArray(pose.transform.matrix);
+          if (pose && reticleRef.current) {
+            reticleRef.current.visible = true;
+            reticleRef.current.matrix.fromArray(pose.transform.matrix);
             setIsPlaneDetected(true);
             // console.log('Plane detected.'); // Log only when a plane is detected
 
             if (isTapping) {
-              const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-              if (points3d.length >= 2) clearPoints();
-              addPoint3d({ x: point.x, y: point.y, z: point.z });
-              setIsTapping(false);
+              if (reticleRef.current) {
+                const currentReticleMesh: THREE.Mesh = reticleRef.current;
+                const point = new THREE.Vector3();
+                point.setFromMatrixPosition(currentReticleMesh.matrix);
+                if (points3d.length >= 2) clearPoints();
+                addPoint3d({ x: point.x, y: point.y, z: point.z });
+                setIsTapping(false);
+              }
             }
           }
         } else {
-          reticle.visible = false;
+          if (reticleRef.current) {
+            reticleRef.current.visible = false;
+          }
           setIsPlaneDetected(false);
           // console.log('No plane detected.'); // Log only when no plane is detected
         }
-      } else {
-        console.log('Hit test source is null.');
       }
+      // End of else if (hitTestSource) block
       renderer.render(scene, camera);
     };
 
     renderer.setAnimationLoop(renderLoop);
 
     return () => {
-      scene.remove(reticle);
+      if (reticleRef.current) {
+        scene.remove(reticleRef.current);
+      }
       if (rendererRef.current) {
-          rendererRef.current.setAnimationLoop(null);
+        rendererRef.current.setAnimationLoop(null);
       }
     };
-  }, [xrSession, isTapping, addPoint3d, clearPoints, points3d.length, setIsPlaneDetected]);
+  }, [
+    xrSession,
+    isTapping,
+    addPoint3d,
+    clearPoints,
+    points3d.length,
+    setIsPlaneDetected,
+  ]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -198,8 +272,13 @@ const MeasurePage: React.FC = () => {
       lineRef.current = null;
     }
     if (points3d.length === 2) {
-      const geometry = new THREE.BufferGeometry().setFromPoints(points3d.map(p => new THREE.Vector3(p.x, p.y, p.z)));
-      const material = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 10 });
+      const geometry = new THREE.BufferGeometry().setFromPoints(
+        points3d.map((p) => new THREE.Vector3(p.x, p.y, p.z))
+      );
+      const material = new THREE.LineBasicMaterial({
+        color: 0xff00ff,
+        linewidth: 10,
+      });
       const line = new THREE.Line(geometry, material);
       lineRef.current = line;
       scene.add(line);
@@ -223,7 +302,10 @@ const MeasurePage: React.FC = () => {
         muted
         playsInline
       />
-      <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full z-0" />
+      <canvas
+        ref={canvasRef}
+        className="absolute top-0 left-0 w-full h-full z-0"
+      />
       <MeasureUI />
     </div>
   );
