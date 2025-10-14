@@ -43,6 +43,16 @@ const MeasurePage: React.FC = () => {
   const { stream, startCamera, toggleCameraFacingMode } = useCamera();
 
   useEffect(() => {
+    const initWebXrSupport = async () => {
+      const supported = await isWebXRAvailable();
+      setIsWebXrSupported(supported);
+    };
+    initWebXrSupport();
+  }, [setIsWebXrSupported]); // setIsWebXrSupported はuseCallbackでメモ化されているため、初回レンダリング時のみ実行される
+
+  useEffect(() => {
+    // startCamera() は useCamera フックの内部で facingMode の変更に応じて自動的に呼び出される
+    // ここでは stream の変更に応じて video 要素を更新する
     console.log("MeasurePage: useEffect triggered with stream:", stream);
     if (videoRef.current) {
       console.log("MeasurePage: Current videoRef.current.srcObject:", videoRef.current.srcObject);
@@ -61,86 +71,6 @@ const MeasurePage: React.FC = () => {
       }
     }
   }, [stream]);
-
-  // Effect to handle camera toggle requests from MeasureUI
-  useEffect(() => {
-    if (cameraToggleRequested) {
-      toggleCameraFacingMode();
-      setCameraToggleRequested(false);
-    }
-  }, [cameraToggleRequested, toggleCameraFacingMode, setCameraToggleRequested]);
-
-  const startARSession = useCallback(async () => {
-    const isSupported = await isWebXRAvailable();
-    if (!isSupported || !canvasRef.current) {
-      setArError('お使いのデバイスはARに対応していません。');
-      return;
-    }
-    setIsArMode(true);
-
-    try {
-      const session = await navigator.xr?.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test', 'local-floor'],
-        optionalFeatures: ['dom-overlay'],
-        domOverlay: { root: document.getElementById('ar-overlay')! },
-      });
-
-      if (!session) {
-        setArError('ARセッションの開始に失敗しました。');
-        setIsArMode(false);
-        return;
-      }
-
-      const renderer = new THREE.WebGLRenderer({
-        canvas: canvasRef.current,
-        alpha: true,
-        antialias: true,
-      });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      rendererRef.current = renderer;
-
-      const referenceSpace = await session.requestReferenceSpace('local-floor');
-      renderer.xr.setReferenceSpace(referenceSpace);
-      await renderer.xr.setSession(session);
-      setXrSession(session);
-
-      console.log('import.meta.env.MODE:', import.meta.env.MODE);
-
-      // Debug: Force plane detection in development environment
-      if (import.meta.env.MODE === 'development') {
-        setIsPlaneDetected(true);
-        // Position reticle at a default location for debugging (e.g., near the center of the view)
-        if (reticleRef.current) {
-          reticleRef.current.matrix.identity();
-          reticleRef.current.matrix.makeTranslation(0, 0, -1.0); // Example: 1 meter in front of the camera
-          reticleRef.current.visible = true;
-        }
-      }
-
-      session.addEventListener('end', () => {
-        renderer.xr.setAnimationLoop(null);
-        renderer.dispose();
-        rendererRef.current = null;
-        setXrSession(null);
-        setIsPlaneDetected(false);
-        setIsArMode(false);
-      });
-    } catch (error) {
-      console.error('AR Error:', error);
-      setArError(error instanceof Error ? error.message : String(error));
-      setIsArMode(false);
-    }
-  }, [setArError, setIsArMode, setIsPlaneDetected, setXrSession]);
-
-  useEffect(() => {
-    const initCamera = async () => {
-      const supported = await isWebXRAvailable();
-      setIsWebXrSupported(supported); // ここでisWebXrSupportedを設定
-      startCamera();
-    };
-    initCamera();
-  }, [startCamera, setIsWebXrSupported]); // setIsWebXrSupported を依存配列に追加
 
   const handleCanvasClick = useCallback(() => {
     if (xrSession) {
