@@ -2,7 +2,12 @@ import { createPortal } from 'react-dom';
 import { useMeasureStore } from '../store/measureStore';
 import { formatMeasurement } from '../core/measure/format';
 
-const MeasureUI: React.FC = () => {
+interface MeasureUIProps {
+  onStartARSession: () => void; // 新しく追加するprops
+  onToggleCameraFacingMode: () => void;
+}
+
+const MeasureUI: React.FC<MeasureUIProps> = ({ onStartARSession, onToggleCameraFacingMode }) => { // propsを受け取る
   const {
     points3d,
     measurement,
@@ -13,8 +18,8 @@ const MeasureUI: React.FC = () => {
     isWebXrSupported,
     facingMode,
     clearPoints,
-    setIsArMode,
-    setCameraToggleRequested,
+    // setIsArMode, // 直接呼び出すのをやめる
+    // setCameraToggleRequested, // 直接呼び出すのをやめる
   } = useMeasureStore();
 
   const getInstructionText = () => {
@@ -43,7 +48,7 @@ const MeasureUI: React.FC = () => {
             className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             onClick={(e) => {
               e.stopPropagation();
-              setIsArMode(true);
+              onStartARSession(); // propsとして受け取った関数を呼び出す
             }}
           >
             AR計測を開始
@@ -54,7 +59,7 @@ const MeasureUI: React.FC = () => {
             className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             onClick={(e) => {
               e.stopPropagation();
-              setCameraToggleRequested(true);
+              onToggleCameraFacingMode(); // propsとして受け取った関数を呼び出す
             }}
           >
             カメラ切り替え (
@@ -79,9 +84,7 @@ const MeasureUI: React.FC = () => {
     console.error(
       'DOM element with id "ar-overlay" not found. UI will not be rendered.'
     );
-    return null; // overlayRoot が見つからない場合は何もレンダリングしない
+    return null;
   }
   return overlayRoot ? createPortal(uiContent, overlayRoot) : null;
 };
-
-export default MeasureUI;

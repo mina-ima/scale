@@ -255,7 +255,10 @@ const MeasurePage: React.FC = () => {
         ref={canvasRef}
         className="absolute top-0 left-0 w-full h-full z-0"
       />
-      <MeasureUI />
+          <MeasureUI
+            onStartARSession={startARSession}
+            onToggleCameraFacingMode={toggleCameraFacingMode}
+          />,
     </div>
   );
 };
