@@ -1,22 +1,33 @@
-export const getCameraStream = async (facingMode: 'user' | 'environment' | undefined = 'environment'): Promise<MediaStream | ErrorState> => {
+import { ErrorState } from '../../store/measureStore';
+
+export const getCameraStream = async (
+  facingMode: 'user' | 'environment' | undefined = 'environment'
+): Promise<MediaStream | ErrorState> => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: facingMode },
     });
     return stream;
   } catch (error) {
+    console.error("getCameraStream: Raw error object:", error); // Add this line
     if (error instanceof DOMException && error.name === 'NotAllowedError') {
       return {
+        name: 'CameraError',
+        title: 'カメラアクセス拒否',
         code: 'CAMERA_DENIED',
         message: 'Camera access denied.',
       };
     } else if (error instanceof Error) {
       return {
+        name: 'CameraError',
+        title: '不明なカメラエラー',
         code: 'UNKNOWN',
         message: `Failed to get camera stream: ${error.message}`,
       };
     } else {
       return {
+        name: 'CameraError',
+        title: '不明なカメラエラー',
         code: 'UNKNOWN',
         message: 'Failed to get camera stream: An unknown error occurred.',
       };

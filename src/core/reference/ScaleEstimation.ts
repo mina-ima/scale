@@ -1,7 +1,7 @@
 import { DetectedRectangle } from './ShapeDetection';
 import { ReferenceObject } from './ReferenceObject';
 
-export interface ScaleEstimationResult {
+export interface ScaleEstimation {
   mmPerPx: number;
   confidence: number; // 0 to 1, higher is better
   matchedReferenceObject: ReferenceObject | null;
@@ -11,8 +11,8 @@ export interface ScaleEstimationResult {
 export const estimateScale = (
   detectedRectangles: DetectedRectangle[],
   referenceObjects: ReferenceObject[]
-): ScaleEstimationResult => {
-  let bestResult: ScaleEstimationResult = {
+): ScaleEstimation => {
+  let bestResult: ScaleEstimation = {
     mmPerPx: 0,
     confidence: 0,
     matchedReferenceObject: null,
@@ -66,7 +66,7 @@ export const estimateScale = (
 export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7; // Example threshold
 
 export const shouldConfirmScaleEstimation = (
-  result: ScaleEstimationResult,
+  result: ScaleEstimation,
   threshold: number = DEFAULT_CONFIDENCE_THRESHOLD
 ): boolean => {
   // Placeholder implementation
@@ -74,7 +74,7 @@ export const shouldConfirmScaleEstimation = (
 };
 
 export const getScaleEstimationHint = (
-  result: ScaleEstimationResult,
+  result: ScaleEstimation,
   needsConfirmation: boolean
 ): string => {
   if (needsConfirmation) {

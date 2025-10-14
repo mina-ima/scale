@@ -61,9 +61,10 @@ describe('MeasurePage', () => {
 
   it('should calculate and display distance after two taps', () => {
     useMeasureStore.getState().setScale({
-      source: 'a4',
       mmPerPx: 0.5,
       confidence: 1,
+      matchedReferenceObject: null,
+      matchedDetectedRectangle: null,
     });
 
     render(<MeasurePage />);
@@ -82,9 +83,10 @@ describe('MeasurePage', () => {
 
   it('should clear the measurement on the third tap and start a new one', () => {
     useMeasureStore.getState().setScale({
-      source: 'a4',
       mmPerPx: 0.5,
       confidence: 1,
+      matchedReferenceObject: null,
+      matchedDetectedRectangle: null,
     });
 
     render(<MeasurePage />);
@@ -112,9 +114,10 @@ describe('MeasurePage', () => {
 
   it('should change the displayed measurement unit when unit selection changes', () => {
     useMeasureStore.getState().setScale({
-      source: 'a4',
       mmPerPx: 0.5,
       confidence: 1,
+      matchedReferenceObject: null,
+      matchedDetectedRectangle: null,
     });
 
     render(<MeasurePage />);
@@ -143,9 +146,10 @@ describe('MeasurePage', () => {
 
   it('should clear measurement and points when reset button is clicked', () => {
     useMeasureStore.getState().setScale({
-      source: 'a4',
       mmPerPx: 0.5,
       confidence: 1,
+      matchedReferenceObject: null,
+      matchedDetectedRectangle: null,
     });
 
     render(<MeasurePage />);

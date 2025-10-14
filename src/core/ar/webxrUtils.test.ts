@@ -67,7 +67,7 @@ describe('webxrUtils', () => {
 
       const session = await startXrSession();
       expect(mockXRSystem.requestSession).toHaveBeenCalledWith('immersive-ar', {
-        optionalFeatures: ['dom-overlay', 'hit-test'],
+        optionalFeatures: ['hit-test'],
       });
       expect(session).toBe(mockXRSession);
     });

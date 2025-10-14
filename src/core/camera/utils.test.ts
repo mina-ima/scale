@@ -5,7 +5,8 @@ describe('getCameraStream', () => {
   const mockGetUserMedia = vi.fn();
 
   beforeEach(() => {
-    navigator.mediaDevices.getUserMedia = mockGetUserMedia;
+    // @ts-expect-error - Mocking navigator.mediaDevices for testing
+    navigator.mediaDevices = { getUserMedia: mockGetUserMedia };
   });
 
   afterEach(() => {
@@ -16,33 +17,43 @@ describe('getCameraStream', () => {
     const mockStream = {} as MediaStream;
     mockGetUserMedia.mockResolvedValue(mockStream);
 
-    const result = await getCameraStream();
+    const result = await getCameraStream('environment');
     expect(result).toBe(mockStream);
-    expect(mockGetUserMedia).toHaveBeenCalledWith({ video: true });
+    expect(mockGetUserMedia).toHaveBeenCalledWith({
+      video: { facingMode: 'environment' },
+    });
   });
 
   it('should return CAMERA_DENIED error when permission is denied', async () => {
     const mockError = new DOMException('Permission denied', 'NotAllowedError');
     mockGetUserMedia.mockRejectedValue(mockError);
 
-    const result = await getCameraStream();
-    expect(result).toEqual({
-      code: 'CAMERA_DENIED',
-      message: 'Camera access denied.',
+    const result = await getCameraStream('environment');
+    expect(result).toEqual(
+      expect.objectContaining({
+        code: 'CAMERA_DENIED',
+        message: 'Camera access denied.',
+      })
+    );
+    expect(mockGetUserMedia).toHaveBeenCalledWith({
+      video: { facingMode: 'environment' },
     });
-    expect(mockGetUserMedia).toHaveBeenCalledWith({ video: true });
   });
 
   it('should return UNKNOWN error for other getUserMedia failures', async () => {
     const mockError = new Error('Some other error');
     mockGetUserMedia.mockRejectedValue(mockError);
 
-    const result = await getCameraStream();
-    expect(result).toEqual({
-      code: 'UNKNOWN',
-      message: 'Failed to get camera stream: Some other error',
+    const result = await getCameraStream('environment');
+    expect(result).toEqual(
+      expect.objectContaining({
+        code: 'UNKNOWN',
+        message: 'Failed to get camera stream: Some other error',
+      })
+    );
+    expect(mockGetUserMedia).toHaveBeenCalledWith({
+      video: { facingMode: 'environment' },
     });
-    expect(mockGetUserMedia).toHaveBeenCalledWith({ video: true });
   });
 });
 

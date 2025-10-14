@@ -1,5 +1,9 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { useMeasureStore } from '../store/measureStore';
+import {
+  useMeasureStore,
+  MeasureMode,
+  ErrorState,
+} from '../store/measureStore';
 import { getTapCoordinates } from '../core/fallback/utils';
 import { calculate2dDistance } from '../core/measure/calculate2dDistance';
 import { formatMeasurement } from '../core/measure/format';
@@ -150,7 +154,8 @@ const GrowthMeasurementTabContent: React.FC<
           scale?.mmPerPx || 1
         );
         setMeasurement({
-          mode: `growth-${mode}` as MeasureMode, // Add the mode property
+          mode: `growth-${mode}` as MeasureMode,
+          measurementMethod: 'fallback',
           valueMm: distance,
           unit: unit, // Use the current unit from the store
           dateISO: new Date().toISOString().split('T')[0],

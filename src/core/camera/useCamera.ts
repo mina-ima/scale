@@ -1,31 +1,56 @@
-import { useState, useCallback, useEffect } from 'react'; // useEffectを追加
-import { getCameraStream, stopCameraStream } from './utils'; // utilsからインポート
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { getCameraStream, stopCameraStream } from './utils';
+import { ErrorState } from '../../store/measureStore';
 
 export const useCamera = () => {
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment'); // デフォルトはバックカメラ
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>(
+    'environment'
+  );
+
+  useEffect(() => {
+    streamRef.current = stream;
+  }, [stream]);
 
   const startCamera = useCallback(async () => {
-    console.log('useCamera: startCamera called. facingMode:', facingMode); // 追加
+    console.log('useCamera: startCamera called. facingMode:', facingMode);
     try {
-      // 既存のストリームがあれば停止
-      if (stream) {
-        stopCameraStream(stream);
-        console.log('useCamera: Existing stream stopped. ID:', stream.id); // 追加
+      if (streamRef.current) {
+        stopCameraStream(streamRef.current);
+        console.log(
+          'useCamera: Existing stream stopped. ID:',
+          streamRef.current.id
+        );
       }
-      const mediaStream = await getCameraStream(facingMode); // facingModeを渡す
-      setStream(mediaStream as MediaStream); // MediaStream | ErrorState の可能性があるのでキャスト
-      console.log('useCamera: New stream set. ID:', (mediaStream as MediaStream)?.id); // 追加
-      setError(null);
-      return mediaStream;
+      const result = await getCameraStream(facingMode);
+
+      if (result && 'id' in result) {
+        setStream(result as MediaStream);
+        console.log(
+          'useCamera: New stream set. ID:',
+          (result as MediaStream).id
+        );
+        setError(null);
+        return result;
+      } else {
+        setError(result as ErrorState);
+        setStream(null);
+        console.error('useCamera: Error starting camera:', result);
+        return null;
+      }
     } catch (err) {
-      setError(err as Error);
+      setError({
+        name: 'CameraError',
+        title: 'カメラエラー',
+        message: (err as Error).message,
+      } as ErrorState);
       setStream(null);
-      console.error('useCamera: Error starting camera:', err); // 追加
+      console.error('useCamera: Error starting camera:', err);
       return null;
     }
-  }, [facingMode]); // facingModeのみに依存
+  }, [facingMode]);
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -38,11 +63,23 @@ export const useCamera = () => {
     setFacingMode((prevMode) => (prevMode === 'user' ? 'environment' : 'user'));
   }, []);
 
-  // facingModeが変更されたらカメラを再起動
   useEffect(() => {
-    console.log('useCamera: useEffect triggered. facingMode:', facingMode); // 追加
+    console.log('useCamera: useEffect triggered. facingMode:', facingMode);
     startCamera();
-  }, [facingMode, startCamera]); // facingModeとstartCameraを依存配列に追加
+    return () => {
+      console.log('useCamera: Cleanup on unmount. Stopping stream if exists.');
+      if (streamRef.current) {
+        stopCameraStream(streamRef.current);
+      }
+    };
+  }, [facingMode, startCamera]);
 
-  return { stream, error, startCamera, stopCamera, facingMode, toggleCameraFacingMode };
+  return {
+    stream,
+    error,
+    startCamera,
+    stopCamera,
+    facingMode,
+    toggleCameraFacingMode,
+  };
 };

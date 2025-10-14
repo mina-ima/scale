@@ -10,7 +10,10 @@ const HomePage: React.FC = () => {
         <Link to="/measure" className="btn btn-primary btn-lg max-w-xs mx-auto">
           計測モード
         </Link>
-        <Link to="/growth-record" className="btn btn-secondary btn-lg max-w-xs mx-auto">
+        <Link
+          to="/growth-record"
+          className="btn btn-secondary btn-lg max-w-xs mx-auto"
+        >
           成長記録モード
         </Link>
       </div>

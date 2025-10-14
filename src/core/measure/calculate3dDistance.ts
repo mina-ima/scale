@@ -1,3 +1,5 @@
+import { Point3D } from '../../types/common';
+
 export function calculate3dDistance(p1: Point3D, p2: Point3D): number {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;

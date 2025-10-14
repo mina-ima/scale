@@ -25,7 +25,7 @@ coverage
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-temporary-files)
 .grunt
 
-# Bower dependency directory (https://bower.io/)
+# Bower dependency directory (https://bower.github.io/)
 bower_components
 
 # node-waf configuration
@@ -130,3 +130,12 @@ dist-ssr
 
 # Vite
 .vite_server_pid
+
+# Playwright report
+playwright-report/
+
+# Test results
+test-results/
+
+# User-provided image
+画面.jpg

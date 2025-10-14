@@ -83,7 +83,7 @@ test.describe('Growth Record Mode', () => {
     const downloadPromise = page.waitForEvent('download');
 
     // Add a download handler
-    page.on('download', async download => {
+    page.on('download', async (download) => {
       // You can save the file to a temporary path if needed for further inspection
       // const path = await download.path();
       // console.log(`Downloaded to: ${path}`);
@@ -136,6 +136,8 @@ test.describe('Growth Record Mode', () => {
     await page.getByRole('button', { name: '保存' }).click();
 
     // Expect a toast message
-    await expect(page.getByText(/体重: 25.5 kg, 日付: .* を保存しました。/)).toBeVisible({ timeout: 10000 });
+    await expect(
+      page.getByText(/体重: 25.5 kg, 日付: .* を保存しました。/)
+    ).toBeVisible({ timeout: 10000 });
   });
 });

@@ -10,7 +10,7 @@ export default defineConfig({
   reporter: 'html',
   webServer: {
     command: 'pnpm dev',
-    url: 'http://localhost:5173',
+    url: 'http://localhost:5174',
     timeout: 120000,
     reuseExistingServer: !process.env.CI,
   },

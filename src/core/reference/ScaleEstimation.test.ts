@@ -1,8 +1,8 @@
 import {
   estimateScale,
-  ScaleEstimationResult,
   shouldConfirmScaleEstimation,
   getScaleEstimationHint,
+  ScaleEstimation,
 } from './ScaleEstimation';
 import { DetectedRectangle } from './ShapeDetection';
 import { A4_PAPER, CREDIT_CARD, REFERENCE_OBJECTS } from './ReferenceObject';
@@ -112,7 +112,7 @@ describe('estimateScale', () => {
 
 describe('shouldConfirmScaleEstimation', () => {
   it('should return true if confidence is below the threshold', () => {
-    const result: ScaleEstimationResult = {
+    const result: ScaleEstimation = {
       mmPerPx: 1,
       confidence: 0.6,
       matchedReferenceObject: A4_PAPER,
@@ -122,7 +122,7 @@ describe('shouldConfirmScaleEstimation', () => {
   });
 
   it('should return false if confidence is at or above the threshold', () => {
-    const result: ScaleEstimationResult = {
+    const result: ScaleEstimation = {
       mmPerPx: 1,
       confidence: 0.7,
       matchedReferenceObject: A4_PAPER,
@@ -130,7 +130,7 @@ describe('shouldConfirmScaleEstimation', () => {
     };
     expect(shouldConfirmScaleEstimation(result, 0.7)).toBe(false);
 
-    const result2: ScaleEstimationResult = {
+    const result2: ScaleEstimation = {
       mmPerPx: 1,
       confidence: 0.8,
       matchedReferenceObject: A4_PAPER,
@@ -140,7 +140,7 @@ describe('shouldConfirmScaleEstimation', () => {
   });
 
   it('should use the default threshold if none is provided', () => {
-    const result: ScaleEstimationResult = {
+    const result: ScaleEstimation = {
       mmPerPx: 1,
       confidence: 0.6, // Below default 0.7
       matchedReferenceObject: A4_PAPER,
@@ -148,7 +148,7 @@ describe('shouldConfirmScaleEstimation', () => {
     };
     expect(shouldConfirmScaleEstimation(result)).toBe(true);
 
-    const result2: ScaleEstimationResult = {
+    const result2: ScaleEstimation = {
       mmPerPx: 1,
       confidence: 0.7, // At default 0.7
       matchedReferenceObject: A4_PAPER,
@@ -157,10 +157,9 @@ describe('shouldConfirmScaleEstimation', () => {
     expect(shouldConfirmScaleEstimation(result2)).toBe(false);
   });
 });
-
 describe('getScaleEstimationHint', () => {
   it('should return a hint for no reference object detected when confirmation is needed', () => {
-    const result: ScaleEstimationResult = {
+    const result: ScaleEstimation = {
       mmPerPx: 0,
       confidence: 0,
       matchedReferenceObject: null,
@@ -172,7 +171,7 @@ describe('getScaleEstimationHint', () => {
   });
 
   it('should return a hint for low confidence with a matched object when confirmation is needed', () => {
-    const result: ScaleEstimationResult = {
+    const result: ScaleEstimation = {
       mmPerPx: 1,
       confidence: 0.6,
       matchedReferenceObject: A4_PAPER,
@@ -184,7 +183,7 @@ describe('getScaleEstimationHint', () => {
   });
 
   it('should return a hint for no scale estimation when no confirmation is needed but mmPerPx is 0', () => {
-    const result: ScaleEstimationResult = {
+    const result: ScaleEstimation = {
       mmPerPx: 0,
       confidence: 0.8, // High confidence but mmPerPx is 0 (e.g., no detected rects)
       matchedReferenceObject: null,
@@ -196,55 +195,7 @@ describe('getScaleEstimationHint', () => {
   });
 
   it('should return an empty string if no hint is needed', () => {
-    const result: ScaleEstimationResult = {
-      mmPerPx: 1,
-      confidence: 0.8,
-      matchedReferenceObject: A4_PAPER,
-      matchedDetectedRectangle: null,
-    };
-    expect(getScaleEstimationHint(result, false)).toBe('');
-  });
-});
-
-describe('getScaleEstimationHint', () => {
-  it('should return a hint for no reference object detected when confirmation is needed', () => {
-    const result: ScaleEstimationResult = {
-      mmPerPx: 0,
-      confidence: 0,
-      matchedReferenceObject: null,
-      matchedDetectedRectangle: null,
-    };
-    expect(getScaleEstimationHint(result, true)).toBe(
-      '基準物が検出されませんでした。A4用紙やクレジットカードなどを画面内に収めてください。'
-    );
-  });
-
-  it('should return a hint for low confidence with a matched object when confirmation is needed', () => {
-    const result: ScaleEstimationResult = {
-      mmPerPx: 1,
-      confidence: 0.6,
-      matchedReferenceObject: A4_PAPER,
-      matchedDetectedRectangle: null,
-    };
-    expect(getScaleEstimationHint(result, true)).toBe(
-      '「A4 Paper」が検出されましたが、精度が低い可能性があります。再撮影しますか？'
-    );
-  });
-
-  it('should return a hint for no scale estimation when no confirmation is needed but mmPerPx is 0', () => {
-    const result: ScaleEstimationResult = {
-      mmPerPx: 0,
-      confidence: 0.8, // High confidence but mmPerPx is 0 (e.g., no detected rects)
-      matchedReferenceObject: null,
-      matchedDetectedRectangle: null,
-    };
-    expect(getScaleEstimationHint(result, false)).toBe(
-      'スケールを推定できませんでした。基準物を画面内に収めてください。'
-    );
-  });
-
-  it('should return an empty string if no hint is needed', () => {
-    const result: ScaleEstimationResult = {
+    const result: ScaleEstimation = {
       mmPerPx: 1,
       confidence: 0.8,
       matchedReferenceObject: A4_PAPER,

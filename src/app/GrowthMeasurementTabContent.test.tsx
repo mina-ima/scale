@@ -15,7 +15,12 @@ const mockSetUnit = vi.fn();
 let mockMeasureStoreValue: MeasureState = {
   points: [],
   measurement: null,
-  scale: { source: 'none', mmPerPx: 1, confidence: 1 }, // Mock a default scale
+  scale: {
+    mmPerPx: 1,
+    confidence: 1,
+    matchedReferenceObject: null,
+    matchedDetectedRectangle: null,
+  },
   unit: 'cm',
   addPoint: mockAddPoint,
   clearPoints: mockClearPoints,
@@ -28,6 +33,19 @@ let mockMeasureStoreValue: MeasureState = {
   setScale: vi.fn(),
   setError: vi.fn(),
   addPoint3d: vi.fn(),
+  setIsArMode: vi.fn(),
+  setXrSession: vi.fn(),
+  setIsPlaneDetected: vi.fn(),
+  setArError: vi.fn(),
+  setIsWebXrSupported: vi.fn(),
+  setCameraToggleRequested: vi.fn(),
+  isArMode: false,
+  xrSession: null,
+  isPlaneDetected: false,
+  arError: null,
+  isWebXrSupported: false,
+  cameraToggleRequested: false,
+  facingMode: 'environment',
 };
 
 // Mock the zustand store
@@ -45,7 +63,12 @@ describe('GrowthMeasurementTabContent', () => {
     mockMeasureStoreValue = {
       points: [],
       measurement: null,
-      scale: { source: 'none', mmPerPx: 1, confidence: 1 }, // Mock a default scale
+      scale: {
+        mmPerPx: 1,
+        confidence: 1,
+        matchedReferenceObject: null,
+        matchedDetectedRectangle: null,
+      },
       unit: 'cm',
       addPoint: mockAddPoint,
       clearPoints: mockClearPoints,
@@ -58,6 +81,19 @@ describe('GrowthMeasurementTabContent', () => {
       setScale: vi.fn(),
       setError: vi.fn(),
       addPoint3d: vi.fn(),
+      setIsArMode: vi.fn(),
+      setXrSession: vi.fn(),
+      setIsPlaneDetected: vi.fn(),
+      setArError: vi.fn(),
+      setIsWebXrSupported: vi.fn(),
+      setCameraToggleRequested: vi.fn(),
+      isArMode: false,
+      xrSession: null,
+      isPlaneDetected: false,
+      arError: null,
+      isWebXrSupported: false,
+      cameraToggleRequested: false,
+      facingMode: 'environment',
     };
 
     vi.mocked(useMeasureStore).mockReturnValue(mockMeasureStoreValue);
@@ -123,6 +159,7 @@ describe('GrowthMeasurementTabContent', () => {
     );
     expect(mockSetMeasurement).toHaveBeenCalledWith({
       mode: 'growth-shinchou',
+      measurementMethod: 'fallback',
       valueMm: 100,
       unit: 'cm',
       dateISO: expect.any(String),
@@ -136,6 +173,7 @@ describe('GrowthMeasurementTabContent', () => {
     ]; // Two points already added
     mockMeasureStoreValue.measurement = {
       mode: 'growth-height',
+      measurementMethod: 'fallback',
       valueMm: 100,
       unit: 'cm',
       dateISO: '2023-01-01',

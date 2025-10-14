@@ -54,44 +54,61 @@ describe('useCamera', () => {
     });
   });
 
-  it('should return null stream and error initially', () => {
+  it('should call getUserMedia on mount via useEffect', async () => {
     const { result } = renderHook(() => useCamera());
-    expect(result.current.stream).toBeNull();
+    // It should be called once on mount
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
+      video: { facingMode: 'environment' },
+    });
+
+    // Wait for the stream to be set
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.stream).toBe(mockVideoStream);
     expect(result.current.error).toBeNull();
-    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
   });
 
   it('should request camera access and provide a stream', async () => {
     const { result } = renderHook(() => useCamera());
 
+    // Called once on mount
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(1);
+
     await act(async () => {
       await result.current.startCamera();
     });
 
+    // Called again by startCamera
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledTimes(2);
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
-      video: true,
+      video: { facingMode: 'environment' },
     });
     expect(result.current.stream).toBe(mockVideoStream);
     expect(result.current.error).toBeNull();
   });
 
   it('should handle camera access denied error', async () => {
-    const mockError = new Error('Permission denied');
-    (navigator.mediaDevices.getUserMedia as Mock).mockImplementationOnce(() =>
-      Promise.reject(mockError)
-    );
+    const mockError = new DOMException('Permission denied', 'NotAllowedError');
+    (navigator.mediaDevices.getUserMedia as Mock).mockRejectedValue(mockError);
 
     const { result } = renderHook(() => useCamera());
 
     await act(async () => {
-      await result.current.startCamera();
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledWith({
-      video: true,
+      video: { facingMode: 'environment' },
     });
     expect(result.current.stream).toBeNull();
-    expect(result.current.error).toBe(mockError);
+    expect(result.current.error).toEqual(
+      expect.objectContaining({
+        code: 'CAMERA_DENIED',
+      })
+    );
   });
 
   it('should stop the stream when stopCamera is called', async () => {

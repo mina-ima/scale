@@ -31,4 +31,8 @@ describe('formatMeasurement', () => {
   it('should handle negative numbers', () => {
     expect(formatMeasurement(-500, 'cm')).toBe('-50.0 cm');
   });
+
+  it('should format values with more than one decimal place to one decimal place', () => {
+    expect(formatMeasurement(763.08, 'cm')).toBe('76.3 cm'); // 763.08mm = 76.308cm
+  });
 });

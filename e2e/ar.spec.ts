@@ -72,10 +72,10 @@ test.describe('AR Mode', () => {
         value: {
           isSessionSupported: () => Promise.resolve(true),
           requestSession: async () => {
-          // 実際のブラウザの挙動を模倣するために、少し遅延を入れる
-          await new Promise(resolve => setTimeout(resolve, 50));
-          return mockXRSession;
-        },
+            // 実際のブラウザの挙動を模倣するために、少し遅延を入れる
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            return mockXRSession;
+          },
         },
       });
     });
@@ -124,6 +124,19 @@ test.describe('AR Mode', () => {
     // The distance between (1,1,1) and (2,2,2) is sqrt(3) which is ~1.732 meters or 173.2 cm.
     const resultText = page.getByText('173.2 cm');
     await expect(resultText).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should display the camera view (canvas) when entering measure mode', async ({
+    page,
+  }) => {
+    // The beforeEach block already navigates to /measure and mocks WebXR.
+    // We just need to assert that the canvas is visible.
+    const canvas = page.locator('canvas');
+    await expect(canvas).toBeVisible();
+    // Additionally, check if the canvas has some content (not just a black rectangle)
+    // This is a more advanced check and might require comparing screenshots or checking pixel data,
+    // but for now, just checking visibility is a good start.
+    // For a truly "not black" check, we might need to mock a camera stream or analyze canvas content.
   });
 
   test('should display measurement with one decimal place in AR mode', async ({

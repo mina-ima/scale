@@ -44,6 +44,7 @@ const MeasurePage: React.FC = () => {
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
+      videoRef.current.play().catch((e) => console.error("Error playing video stream:", e));
     }
   }, [stream]);
 
