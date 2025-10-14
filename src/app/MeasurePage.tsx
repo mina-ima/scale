@@ -42,9 +42,13 @@ const MeasurePage: React.FC = () => {
   const { stream, startCamera, toggleCameraFacingMode } = useCamera();
 
   useEffect(() => {
-    if (stream && videoRef.current) {
+    if (videoRef.current && stream && videoRef.current.srcObject !== stream) { // streamが実際に変更された場合のみ更新
       videoRef.current.srcObject = stream;
-      videoRef.current.play().catch((e) => console.error("Error playing video stream:", e));
+      videoRef.current.play().then(() => {
+        console.log("MeasurePage: Video stream started successfully.");
+      }).catch((e) => {
+        console.error("MeasurePage: Error playing video stream:", e);
+      });
     }
   }, [stream]);
 
