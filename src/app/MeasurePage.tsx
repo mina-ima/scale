@@ -42,13 +42,22 @@ const MeasurePage: React.FC = () => {
   const { stream, startCamera, toggleCameraFacingMode } = useCamera();
 
   useEffect(() => {
-    if (videoRef.current && stream && videoRef.current.srcObject !== stream) { // streamが実際に変更された場合のみ更新
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().then(() => {
-        console.log("MeasurePage: Video stream started successfully.");
-      }).catch((e) => {
-        console.error("MeasurePage: Error playing video stream:", e);
-      });
+    console.log("MeasurePage: useEffect triggered with stream:", stream);
+    if (videoRef.current) {
+      console.log("MeasurePage: Current videoRef.current.srcObject:", videoRef.current.srcObject);
+      if (stream && videoRef.current.srcObject !== stream) {
+        console.log("MeasurePage: Setting videoRef.current.srcObject to new stream.");
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().then(() => {
+          console.log("MeasurePage: Video stream started successfully.");
+        }).catch((e) => {
+          console.error("MeasurePage: Error playing video stream:", e);
+        });
+      } else if (!stream && videoRef.current.srcObject) {
+        // ストリームがnullになった場合、srcObjectをクリア
+        console.log("MeasurePage: Clearing videoRef.current.srcObject as stream is null.");
+        videoRef.current.srcObject = null;
+      }
     }
   }, [stream]);
 
