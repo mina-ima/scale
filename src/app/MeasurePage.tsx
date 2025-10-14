@@ -4,7 +4,7 @@ import { useMeasureStore } from '../store/measureStore';
 import { calculate3dDistance } from '../core/measure/calculate3dDistance';
 import { useCamera } from '../core/camera/useCamera';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
-import MeasureUI from './MeasureUI';
+import MeasureUIComponent from './MeasureUI';
 
 const MeasurePage: React.FC = () => {
   console.log("MeasurePage: rendered");

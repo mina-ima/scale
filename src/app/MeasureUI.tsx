@@ -7,7 +7,7 @@ interface MeasureUIProps {
   onToggleCameraFacingMode: () => void;
 }
 
-const MeasureUI: React.FC<MeasureUIProps> = ({ onStartARSession, onToggleCameraFacingMode }) => { // propsを受け取る
+const MeasureUIComponent: React.FC<MeasureUIProps> = ({ onStartARSession, onToggleCameraFacingMode }) => { // propsを受け取る
   const {
     points3d,
     measurement,
@@ -88,3 +88,5 @@ const MeasureUI: React.FC<MeasureUIProps> = ({ onStartARSession, onToggleCameraF
   }
   return overlayRoot ? createPortal(uiContent, overlayRoot) : null;
 };
+
+export default MeasureUIComponent;
