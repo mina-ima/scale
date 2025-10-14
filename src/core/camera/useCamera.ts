@@ -14,24 +14,18 @@ export const useCamera = () => {
     streamRef.current = stream;
   }, [stream]);
 
-  const startCamera = useCallback(async () => {
-    console.log('useCamera: startCamera called. facingMode:', facingMode);
+  const startCamera = useCallback(async (mode: 'user' | 'environment') => {
+    console.log('useCamera: startCamera called. facingMode:', mode);
     try {
       if (streamRef.current) {
         stopCameraStream(streamRef.current);
-        console.log(
-          'useCamera: Existing stream stopped. ID:',
-          streamRef.current.id
-        );
+        console.log('useCamera: Existing stream stopped. ID:', streamRef.current.id);
       }
-      const result = await getCameraStream(facingMode);
+      const result = await getCameraStream(mode);
 
       if (result && 'id' in result) {
         setStream(result as MediaStream);
-        console.log(
-          'useCamera: New stream set. ID:',
-          (result as MediaStream).id
-        );
+        console.log('useCamera: New stream set. ID:', (result as MediaStream).id);
         setError(null);
         return result;
       } else {
@@ -50,7 +44,7 @@ export const useCamera = () => {
       console.error('useCamera: Error starting camera:', err);
       return null;
     }
-  }, [facingMode]);
+  }, []); // 依存配列からfacingModeを削除
 
   const stopCamera = useCallback(() => {
     if (stream) {
@@ -63,21 +57,22 @@ export const useCamera = () => {
     setFacingMode((prevMode) => (prevMode === 'user' ? 'environment' : 'user'));
   }, []);
 
+  // facingModeが変更されたらカメラを再起動
   useEffect(() => {
     console.log('useCamera: useEffect triggered. facingMode:', facingMode);
-    startCamera();
+    startCamera(facingMode); // facingModeを引数として渡す
     return () => {
       console.log('useCamera: Cleanup on unmount. Stopping stream if exists.');
       if (streamRef.current) {
         stopCameraStream(streamRef.current);
       }
     };
-  }, [facingMode, startCamera]);
+  }, [facingMode, startCamera]); // startCameraはuseCallbackでメモ化されているため、facingModeの変更時のみ再実行される
 
   return {
     stream,
     error,
-    startCamera,
+    startCamera: () => startCamera(facingMode), // 外部に公開するstartCameraは現在のfacingModeを使用
     stopCamera,
     facingMode,
     toggleCameraFacingMode,
