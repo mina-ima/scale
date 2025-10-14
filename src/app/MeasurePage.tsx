@@ -136,11 +136,11 @@ const MeasurePage: React.FC = () => {
   useEffect(() => {
     const initCamera = async () => {
       const supported = await isWebXRAvailable();
-      // setIsWebXrSupported(supported); // ここは削除済み
-      // startCamera(); // ここを削除
+      setIsWebXrSupported(supported); // ここでisWebXrSupportedを設定
+      startCamera();
     };
     initCamera();
-  }, []); // startCamera と setIsWebXrSupported を依存配列から削除
+  }, [startCamera, setIsWebXrSupported]); // setIsWebXrSupported を依存配列に追加
 
   const handleCanvasClick = useCallback(() => {
     if (xrSession) {
