@@ -7,6 +7,7 @@ import { isWebXRAvailable } from '../core/ar/webxrUtils';
 import MeasureUI from './MeasureUI';
 
 const MeasurePage: React.FC = () => {
+  console.log("MeasurePage: rendered");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);

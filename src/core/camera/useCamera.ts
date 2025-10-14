@@ -65,7 +65,9 @@ export const useCamera = () => {
   // facingModeが変更されたらカメラを再起動
   useEffect(() => {
     console.log('useCamera: useEffect triggered. facingMode:', facingMode);
-    startCamera(facingMode);
+    if (!streamRef.current) { // ストリームがまだ存在しない場合のみstartCameraを呼び出す
+      startCamera(facingMode);
+    }
     return () => {
       console.log('useCamera: Cleanup function executed. streamRef.current:', streamRef.current);
       if (streamRef.current) {
@@ -73,7 +75,7 @@ export const useCamera = () => {
         console.log('useCamera: Stream stopped by cleanup. ID:', streamRef.current.id);
       }
     };
-  }, [facingMode, startCamera]); // startCameraはuseCallbackでメモ化されているため、facingModeの変更時のみ再実行される
+  }, [facingMode, startCamera]);
 
   return {
     stream,
