@@ -48,7 +48,9 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({ onStartARSession, onTogg
             className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             onClick={(e) => {
               e.stopPropagation();
-              onStartARSession(); // propsとして受け取った関数を呼び出す
+              if (onStartARSession) { // ガードを追加
+                onStartARSession();
+              }
             }}
           >
             AR計測を開始
