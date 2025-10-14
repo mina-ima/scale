@@ -76,7 +76,7 @@ export const useCamera = () => {
         streamRef.current = null; // クリーンアップ時にnullに設定
       }
     };
-  }, [facingMode, startCamera]);
+  }, [facingMode, startCamera, stream]); // streamを依存配列に追加
 
   return {
     stream,
