@@ -73,6 +73,7 @@ export const useCamera = () => {
       if (streamRef.current) {
         stopCameraStream(streamRef.current);
         console.log('useCamera: Stream stopped by cleanup. ID:', streamRef.current.id);
+        streamRef.current = null; // クリーンアップ時にnullに設定
       }
     };
   }, [facingMode, startCamera]);
