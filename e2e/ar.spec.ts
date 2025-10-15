@@ -114,11 +114,7 @@ test.describe('AR Mode', () => {
     // Wait for the measurement to be calculated and displayed
     await page.waitForFunction(() => {
       // @ts-expect-error - Test-only access to internal state
-      const measureStore = window.useMeasureStore.getState();
-      return (
-        measureStore.measurement !== null &&
-        measureStore.measurement.valueMm > 0
-      );
+      return window.testState?.points3dCount === 2;
     });
 
     // The distance between (1,1,1) and (2,2,2) is sqrt(3) which is ~1.732 meters or 173.2 cm.
@@ -164,14 +160,81 @@ test.describe('AR Mode', () => {
     // Wait for the measurement to be calculated and displayed
     await page.waitForFunction(() => {
       // @ts-expect-error - Test-only access to internal state
-      const measureStore = window.useMeasureStore.getState();
-      return (
-        measureStore.measurement !== null &&
-        measureStore.measurement.valueMm > 0
-      );
+      return window.testState?.points3dCount === 2;
     });
 
     // Expect the measurement to be displayed as 54.3 cm (one decimal place)
     await expect(page.getByText('54.3 cm')).toBeVisible();
+  });
+
+  test('should show an error when the measurement exceeds 10m', async ({
+    page,
+  }) => {
+    // Override hit test positions for this specific test
+    await page.evaluate(() => {
+      // @ts-expect-error - This is a mock for testing
+      window.mockHitTestPositions = [
+        { x: 0, y: 0, z: 0 },
+        { x: 11, y: 0, z: 0 }, // 11m distance
+      ];
+      // @ts-expect-error - This is a mock for testing
+      window.hitTestResultsIndex = 0;
+    });
+
+    // Wait for AR mode to be active (canvas is visible)
+    const canvas = page.locator('canvas');
+    await expect(canvas).toBeVisible();
+
+    // Simulate two taps on the canvas
+    await canvas.click({ position: { x: 100, y: 100 } });
+    await canvas.click({ position: { x: 200, y: 200 } });
+
+    // Wait for the two points to be registered
+    await page.waitForFunction(() => {
+      // @ts-expect-error - Test-only access to internal state
+      return window.testState?.points3dCount === 2;
+    });
+
+    // Expect an error message to be visible
+    await expect(page.getByText('10mを超える計測は非対応')).toBeVisible();
+
+    // Also check that the measurement was not stored
+    const measurement = await page.evaluate(() => {
+      // @ts-expect-error - Test-only access to internal state
+      return window.useMeasureStore.getState().measurement;
+    });
+    expect(measurement).toBeNull();
+  });
+
+  test('should round the measurement to one decimal place', async ({
+    page,
+  }) => {
+    // Override hit test positions for this specific test
+    await page.evaluate(() => {
+      // @ts-expect-error - This is a mock for testing
+      window.mockHitTestPositions = [
+        { x: 0, y: 0, z: 0 },
+        { x: 0.128, y: 0, z: 0 }, // 0.128m distance
+      ];
+      // @ts-expect-error - This is a mock for testing
+      window.hitTestResultsIndex = 0;
+    });
+
+    // Wait for AR mode to be active (canvas is visible)
+    const canvas = page.locator('canvas');
+    await expect(canvas).toBeVisible();
+
+    // Simulate two taps on the canvas
+    await canvas.click({ position: { x: 100, y: 100 } });
+    await canvas.click({ position: { x: 200, y: 200 } });
+
+    // Wait for the measurement to be calculated and displayed
+    await page.waitForFunction(() => {
+      // @ts-expect-error - Test-only access to internal state
+      return window.testState?.points3dCount === 2;
+    });
+
+    // Expect the measurement to be displayed as 12.8 cm (rounded from 12.8)
+    await expect(page.getByText('12.8 cm')).toBeVisible();
   });
 });

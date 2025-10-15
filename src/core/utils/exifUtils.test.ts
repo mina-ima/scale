@@ -1,20 +1,20 @@
 // src/core/utils/exifUtils.test.ts
-import { vi, it, describe, expect, beforeAll } from 'vitest';
+import { vi, it, describe, expect, beforeAll, beforeEach } from 'vitest';
 import * as exifUtils from './exifUtils';
 import { createJpegWithExifOrientation } from '../../test-helpers/createJpegWithExif';
 
+// Mock Blob and other globals locally for this test file
 vi.stubGlobal(
   'Blob',
   class MockBlob extends Blob {
     #buffer: ArrayBuffer;
-    static shouldReject = false; // Added for testing error scenarios
+    static shouldReject = false;
 
     constructor(blobParts?: BlobPart[], options?: BlobPropertyBag) {
       super(blobParts, options);
       if (blobParts && blobParts.length > 0) {
         const part = blobParts[0];
         if (part instanceof Uint8Array) {
-          // Ensure it's a plain ArrayBuffer, not SharedArrayBuffer
           this.#buffer = new Uint8Array(
             part.buffer,
             part.byteOffset,
@@ -32,7 +32,7 @@ vi.stubGlobal(
       }
 
       this.arrayBuffer = vi.fn(async () => {
-        if (MockBlob.shouldReject) {
+        if ((this.constructor as typeof MockBlob).shouldReject) {
           throw new Error('Read error');
         }
         return this.#buffer;
@@ -47,11 +47,19 @@ vi.stubGlobal(
     Promise.resolve({
       width: 100,
       height: 100,
+      close: vi.fn(),
     })
   )
 );
 
 describe('exifUtils', () => {
+  const mockContext = {
+    translate: vi.fn(),
+    scale: vi.fn(),
+    rotate: vi.fn(),
+    drawImage: vi.fn(),
+  };
+
   beforeAll(() => {
     vi.stubGlobal(
       'OffscreenCanvas',
@@ -62,23 +70,22 @@ describe('exifUtils', () => {
           this.width = width;
           this.height = height;
         }
-        getContext = vi.fn(() => ({
-          translate: vi.fn(),
-          scale: vi.fn(),
-          rotate: vi.fn(),
-          drawImage: vi.fn(),
-        }));
+        getContext = vi.fn(() => mockContext);
         convertToBlob = vi.fn(() =>
           Promise.resolve(new Blob(['rotated content']))
         );
-        addEventListener = vi.fn();
-        removeEventListener = vi.fn();
-        oncontextlost = null;
-        oncontextrestored = null;
-        transferToImageBitmap = vi.fn();
-        dispatchEvent = vi.fn();
       }
     );
+  });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockContext.translate.mockClear();
+    mockContext.scale.mockClear();
+    mockContext.rotate.mockClear();
+    mockContext.drawImage.mockClear();
+    // @ts-expect-error - Resetting static property
+    (Blob as any).shouldReject = false;
   });
 
   describe('getOrientation', () => {
@@ -87,158 +94,59 @@ describe('exifUtils', () => {
       const mockFile = new Blob([new Uint8Array(buffer)], {
         type: 'image/jpeg',
       });
-
-      // --- デバッグ: JPEG ヘッダと IFD0 の生構造を出力 ---
-      const u8 = new Uint8Array(buffer);
-      const head = [...u8.slice(0, 16)]
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join(' ');
-      console.log('JPEG HEAD:', head);
-
-      try {
-        // tiffStart = 2(SOI)+2(APP1 marker)+2(size)+6("Exif\0\0")=12
-        const tiffStart = 12;
-        const dv = new DataView(u8.buffer);
-        const byteOrder = dv.getUint16(tiffStart, false);
-        const little = byteOrder === 0x4949;
-        const magic = dv.getUint16(tiffStart + 2, little);
-        const ifd0Offset = dv.getUint32(tiffStart + 4, little);
-        const ifd0 = tiffStart + ifd0Offset;
-        const numEntries = dv.getUint16(ifd0, little);
-        const entryOffset = ifd0 + 2;
-        const entryBytes = u8.slice(entryOffset, entryOffset + 12);
-        const hex = [...entryBytes]
-          .map((b) => b.toString(16).padStart(2, '0'))
-          .join(' ');
-
-        console.log(
-          'TIFF byteOrder:',
-          byteOrder.toString(16),
-          'little?',
-          little
-        );
-        console.log('TIFF magic:', magic.toString(16), 'IFD0 off:', ifd0Offset);
-        console.log('IFD0 entries:', numEntries);
-        console.log('IFD entry(12B):', hex);
-
-        const tag = dv.getUint16(entryOffset + 0, little);
-        const type = dv.getUint16(entryOffset + 2, little);
-        const count = dv.getUint32(entryOffset + 4, little);
-        const valueOrOffset = entryOffset + 8;
-        const vHi = dv.getUint16(valueOrOffset + 0, little);
-        const vLo = dv.getUint16(valueOrOffset + 2, little);
-        console.log(
-          'Parsed tag:',
-          tag.toString(16),
-          'type:',
-          type,
-          'count:',
-          count,
-          'vHi:',
-          vHi,
-          'vLo:',
-          vLo
-        );
-      } catch (e) {
-        console.error('Debug parse failed:', e);
-      }
-
-      const orientationFromGetOrientation =
-        await exifUtils.getOrientation(mockFile);
-      console.log(
-        'Test: exifUtils.getOrientation returned',
-        orientationFromGetOrientation
-      );
-
-      // Directly call readTiffForOrientation for debugging
-      const buf = await mockFile.arrayBuffer();
-      const dv = new DataView(buf);
-      const tiffStart = 12; // Based on JPEG HEAD debug output
-      const segEnd = buf.byteLength; // Assuming segEnd is the end of the buffer for this test case
-
-      const orientationFromReadTiff = exifUtils.readTiffForOrientation(
-        dv,
-        tiffStart,
-        segEnd
-      );
-      console.log(
-        'Test: exifUtils.readTiffForOrientation returned',
-        orientationFromReadTiff
-      );
-
-      expect(orientationFromReadTiff).toBe(6);
+      const orientation = await exifUtils.getOrientation(mockFile);
+      expect(orientation).toBe(6);
     });
 
     it('should return -1 if no EXIF data is found', async () => {
       const buffer = new ArrayBuffer(100);
       const view = new DataView(buffer);
       view.setUint16(0, 0xffd8, false); // SOI
-      view.setUint16(2, 0xffe0, false); // APP0（EXIFなし）
+      view.setUint16(2, 0xffe0, false); // APP0 (no EXIF)
       const mockFile = new Blob([new Uint8Array(buffer)], {
         type: 'image/jpeg',
       });
-
       const orientation = await exifUtils.getOrientation(mockFile);
       expect(orientation).toBe(-1);
     });
 
     it('should return -1 if arrayBuffer read fails', async () => {
       const mockFile = new Blob(['some data'], { type: 'image/jpeg' });
-      // Simulate a read error by setting the static flag on MockBlob
       // @ts-expect-error - Accessing static property for test control
-      MockBlob.shouldReject = true;
-
+      (Blob as any).shouldReject = true;
       const orientation = await exifUtils.getOrientation(mockFile);
       expect(orientation).toBe(-1);
-
-      // Restore the original behavior
-      // @ts-expect-error - Accessing static property for test control
-      MockBlob.shouldReject = false;
     });
   });
 
   describe('correctImageOrientation', () => {
-    it('should return the original blob if orientation is 1 (normal)', () => {
+    it('should return the original blob if orientation is 1 (normal)', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
       vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(1);
-      return expect(exifUtils.correctImageOrientation(mockFile)).resolves.toBe(
-        mockFile
-      );
+      const result = await exifUtils.correctImageOrientation(mockFile);
+      expect(result).toBe(mockFile);
     });
 
     it('should return a rotated blob if orientation is 6 (90 deg CW)', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
       vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(6);
 
-      // Mock OffscreenCanvas context methods
-      const mockContext = {
-        translate: vi.fn(),
-        scale: vi.fn(),
-        rotate: vi.fn(),
-        drawImage: vi.fn(),
-      };
-      // @ts-expect-error - Mocking getContext
-      global.OffscreenCanvas.prototype.getContext.mockReturnValue(mockContext);
-
       const resultBlob = await exifUtils.correctImageOrientation(mockFile);
 
-      // Verify that rotation and drawing operations were called correctly
-      expect(mockContext.translate).toHaveBeenCalledWith(100, 0); // width, 0 for orientation 6
+      expect(mockContext.translate).toHaveBeenCalledWith(100, 0);
       expect(mockContext.rotate).toHaveBeenCalledWith(0.5 * Math.PI);
-      expect(mockContext.drawImage).toHaveBeenCalledWith(expect.any(ImageBitmap), 0, 0);
-      // Verify that convertToBlob was called
-      expect(global.OffscreenCanvas.prototype.convertToBlob).toHaveBeenCalled();
+      expect(mockContext.drawImage).toHaveBeenCalledWith(expect.any(Object), 0, 0);
 
-      // The returned blob should be the one from the mock convertToBlob
       expect(resultBlob).toBeInstanceOf(Blob);
+      const text = await resultBlob.text();
+      expect(text).toBe('rotated content');
     });
 
-    it('should handle images without EXIF data gracefully', () => {
+    it('should handle images without EXIF data gracefully', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
       vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(-1);
-      return expect(exifUtils.correctImageOrientation(mockFile)).resolves.toBe(
-        mockFile
-      );
+      const result = await exifUtils.correctImageOrientation(mockFile);
+      expect(result).toBe(mockFile);
     });
   });
 });

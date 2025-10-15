@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { useMeasureStore } from '../store/measureStore';
+import { calculate2dDistance } from '../core/measure/calculate2dDistance';
 import { calculate3dDistance } from '../core/measure/calculate3dDistance';
 import { useCamera } from '../core/camera/useCamera';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
+import { isDistanceExceeded } from '../core/measure/maxDistanceGuard';
 import MeasureUIComponent from './MeasureUI';
 
 const MeasurePage: React.FC = () => {
-  console.log("MeasurePage: rendered");
+  console.log('MeasurePage: rendered');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -25,7 +27,10 @@ const MeasurePage: React.FC = () => {
   const [isTapping, setIsTapping] = useState(false);
 
   const {
+    points,
     points3d,
+    scale,
+    addPoint,
     addPoint3d,
     clearPoints,
     setMeasurement,
@@ -36,11 +41,44 @@ const MeasurePage: React.FC = () => {
     setArError,
     setIsWebXrSupported,
     setIsArMode,
-    cameraToggleRequested,
-    setCameraToggleRequested,
   } = useMeasureStore();
 
-  const { stream, startCamera, toggleCameraFacingMode } = useCamera();
+  const { stream, toggleCameraFacingMode } = useCamera();
+
+  const startARSession = useCallback(async () => {
+    if (!canvasRef.current) return;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas: canvasRef.current,
+      alpha: true,
+      antialias: true,
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    rendererRef.current = renderer;
+
+    try {
+      const session = await navigator.xr?.requestSession('immersive-ar', {
+        requiredFeatures: ['hit-test'],
+      });
+
+      if (session) {
+        setXrSession(session);
+        setIsArMode(true);
+        renderer.xr.setSession(session);
+
+        session.addEventListener('end', () => {
+          setXrSession(null);
+          setIsArMode(false);
+          clearPoints();
+        });
+      } else {
+        setArError('ARセッションの開始に失敗しました。');
+      }
+    } catch {
+      setArError('ARセッションの開始中にエラーが発生しました。');
+    }
+  }, [setXrSession, setIsArMode, clearPoints, setArError]);
 
   useEffect(() => {
     const initWebXrSupport = async () => {
@@ -53,43 +91,85 @@ const MeasurePage: React.FC = () => {
   useEffect(() => {
     // startCamera() は useCamera フックの内部で facingMode の変更に応じて自動的に呼び出される
     // ここでは stream の変更に応じて video 要素を更新する
-    console.log("MeasurePage: useEffect triggered with stream:", stream);
+    console.log('MeasurePage: useEffect triggered with stream:', stream);
     if (videoRef.current) {
-      console.log("MeasurePage: Current videoRef.current.srcObject:", videoRef.current.srcObject);
+      console.log(
+        'MeasurePage: Current videoRef.current.srcObject:',
+        videoRef.current.srcObject
+      );
       if (stream && videoRef.current.srcObject !== stream) {
-        console.log("MeasurePage: Setting videoRef.current.srcObject to new stream.");
+        console.log(
+          'MeasurePage: Setting videoRef.current.srcObject to new stream.'
+        );
         videoRef.current.srcObject = stream;
-        videoRef.current.play().then(() => {
-          console.log("MeasurePage: Video stream started successfully.");
-        }).catch((e) => {
-          console.error("MeasurePage: Error playing video stream:", e);
-        });
+        videoRef.current
+          .play()
+          .then(() => {
+            console.log('MeasurePage: Video stream started successfully.');
+          })
+          .catch((e) => {
+            console.error('MeasurePage: Error playing video stream:', e);
+          });
       } else if (!stream && videoRef.current.srcObject) {
         // ストリームがnullになった場合、srcObjectをクリア
-        console.log("MeasurePage: Clearing videoRef.current.srcObject as stream is null.");
+        console.log(
+          'MeasurePage: Clearing videoRef.current.srcObject as stream is null.'
+        );
         videoRef.current.srcObject = null;
       }
     }
   }, [stream]);
 
-  const handleCanvasClick = useCallback(() => {
-    if (xrSession) {
-      setIsTapping(true);
-    }
-  }, [xrSession]);
+  const handleCanvasClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (xrSession) {
+        setIsTapping(true);
+      } else {
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          addPoint({ x, y });
+        }
+      }
+    },
+    [xrSession, addPoint]
+  );
 
   useEffect(() => {
     if (points3d.length === 2) {
       const distanceMeters = calculate3dDistance(points3d[0], points3d[1]);
+      const distanceMm = distanceMeters * 1000;
+      if (isDistanceExceeded(distanceMm)) {
+        setArError('10mを超える計測は非対応');
+        setTimeout(() => {
+          clearPoints();
+          setArError(null);
+        }, 3000); // Clear error after 3 seconds
+      } else {
+        setMeasurement({
+          mode: 'furniture',
+          measurementMethod: 'ar',
+          valueMm: distanceMm,
+          unit: unit,
+          dateISO: new Date().toISOString(),
+        });
+      }
+    }
+  }, [points3d, setMeasurement, unit, clearPoints, setArError]);
+
+  useEffect(() => {
+    if (points.length === 2 && scale?.mmPerPx) {
+      const distance = calculate2dDistance(points[0], points[1], scale.mmPerPx);
       setMeasurement({
         mode: 'furniture',
-        measurementMethod: 'ar',
-        valueMm: distanceMeters * 1000,
+        measurementMethod: 'fallback',
+        valueMm: distance,
         unit: unit,
         dateISO: new Date().toISOString(),
       });
     }
-  }, [points3d, setMeasurement, unit]);
+  }, [points, scale, setMeasurement, unit]);
 
   useEffect(() => {
     if (!xrSession || !rendererRef.current) return;
@@ -197,12 +277,13 @@ const MeasurePage: React.FC = () => {
 
     renderer.setAnimationLoop(renderLoop);
 
+    const currentRenderer = rendererRef.current;
     return () => {
       if (reticleRef.current) {
         scene.remove(reticleRef.current);
       }
-      if (rendererRef.current) {
-        rendererRef.current.setAnimationLoop(null);
+      if (currentRenderer) {
+        currentRenderer.setAnimationLoop(null);
       }
     };
   }, [
@@ -234,6 +315,13 @@ const MeasurePage: React.FC = () => {
     }
   }, [points3d]);
 
+  useEffect(() => {
+    if (window.isPlaywrightTest) {
+      // @ts-expect-error - for testing
+      window.testState = { points3dCount: points3d.length };
+    }
+  }, [points3d]);
+
   // This effect handles the startARSession call when isArMode becomes true.
   useEffect(() => {
     const { isArMode } = useMeasureStore.getState();
@@ -243,7 +331,11 @@ const MeasurePage: React.FC = () => {
   }, [xrSession, startARSession]);
 
   return (
-    <div className="relative w-full h-screen" onClick={handleCanvasClick}>
+    <div
+      data-testid="measure-page-container"
+      className="relative w-full h-screen"
+      onClick={handleCanvasClick}
+    >
       <video
         ref={videoRef}
         className="absolute top-0 left-0 w-full h-full object-cover z-[-1]"
@@ -253,12 +345,13 @@ const MeasurePage: React.FC = () => {
       />
       <canvas
         ref={canvasRef}
+        data-testid="measure-canvas"
         className="absolute top-0 left-0 w-full h-full z-0"
       />
-          <MeasureUI
-            onStartARSession={startARSession}
-            onToggleCameraFacingMode={toggleCameraFacingMode}
-          />,
+      <MeasureUIComponent
+        onStartARSession={startARSession}
+        onToggleCameraFacingMode={toggleCameraFacingMode}
+      />
     </div>
   );
 };
