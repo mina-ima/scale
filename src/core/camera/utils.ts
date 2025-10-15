@@ -9,7 +9,7 @@ export const getCameraStream = async (
     });
     return stream;
   } catch (error) {
-    console.error("getCameraStream: Raw error object:", error); // Add this line
+    console.error('getCameraStream: Raw error object:', error); // Add this line
     if (error instanceof DOMException && error.name === 'NotAllowedError') {
       return {
         name: 'CameraError',

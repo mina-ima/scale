@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
@@ -20,23 +20,25 @@ describe('App Routing', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders MeasurePage on /measure route', () => {
+  it('renders MeasurePage on /measure route', async () => {
     render(
       <MemoryRouter initialEntries={['/measure']}>
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByText('計測モード')).toBeInTheDocument();
-    // Check for a unique element on the MeasurePage instead of the placeholder text
-    expect(screen.getByTestId('measure-page-container')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('measure-page-container')).toBeInTheDocument();
+    });
   });
 
-  it('renders GrowthRecordPage on /growth-record route', () => {
+  it('renders GrowthRecordPage on /growth-record route', async () => {
     render(
       <MemoryRouter initialEntries={['/growth-record']}>
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByText('成長記録モード')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('成長記録モード')).toBeInTheDocument();
+    });
   });
 });

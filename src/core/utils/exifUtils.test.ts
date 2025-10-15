@@ -4,42 +4,41 @@ import * as exifUtils from './exifUtils';
 import { createJpegWithExifOrientation } from '../../test-helpers/createJpegWithExif';
 
 // Mock Blob and other globals locally for this test file
-vi.stubGlobal(
-  'Blob',
-  class MockBlob extends Blob {
-    #buffer: ArrayBuffer;
-    static shouldReject = false;
+class MockBlob extends Blob {
+  #buffer: ArrayBuffer;
+  static shouldReject = false;
 
-    constructor(blobParts?: BlobPart[], options?: BlobPropertyBag) {
-      super(blobParts, options);
-      if (blobParts && blobParts.length > 0) {
-        const part = blobParts[0];
-        if (part instanceof Uint8Array) {
-          this.#buffer = new Uint8Array(
-            part.buffer,
-            part.byteOffset,
-            part.byteLength
-          ).slice().buffer;
-        } else if (part instanceof ArrayBuffer) {
-          this.#buffer = part;
-        } else if (typeof part === 'string') {
-          this.#buffer = new TextEncoder().encode(part).buffer;
-        } else {
-          this.#buffer = new ArrayBuffer(0);
-        }
+  constructor(blobParts?: BlobPart[], options?: BlobPropertyBag) {
+    super(blobParts, options);
+    if (blobParts && blobParts.length > 0) {
+      const part = blobParts[0];
+      if (part instanceof Uint8Array) {
+        this.#buffer = new Uint8Array(
+          part.buffer,
+          part.byteOffset,
+          part.byteLength
+        ).slice().buffer;
+      } else if (part instanceof ArrayBuffer) {
+        this.#buffer = part;
+      } else if (typeof part === 'string') {
+        this.#buffer = new TextEncoder().encode(part).buffer;
       } else {
         this.#buffer = new ArrayBuffer(0);
       }
-
-      this.arrayBuffer = vi.fn(async () => {
-        if ((this.constructor as typeof MockBlob).shouldReject) {
-          throw new Error('Read error');
-        }
-        return this.#buffer;
-      });
+    } else {
+      this.#buffer = new ArrayBuffer(0);
     }
+
+    this.arrayBuffer = vi.fn(async () => {
+      if ((this.constructor as typeof MockBlob).shouldReject) {
+        throw new Error('Read error');
+      }
+      return this.#buffer;
+    });
   }
-);
+}
+
+vi.stubGlobal('Blob', MockBlob);
 
 vi.stubGlobal(
   'createImageBitmap',
@@ -53,41 +52,42 @@ vi.stubGlobal(
 );
 
 describe('exifUtils', () => {
-  const mockContext = {
-    translate: vi.fn(),
-    scale: vi.fn(),
-    rotate: vi.fn(),
-    drawImage: vi.fn(),
+  let mockContext: {
+    translate: ReturnType<typeof vi.fn>;
+    scale: ReturnType<typeof vi.fn>;
+    rotate: ReturnType<typeof vi.fn>;
+    drawImage: ReturnType<typeof vi.fn>;
   };
 
   beforeAll(() => {
     vi.stubGlobal(
       'OffscreenCanvas',
-      class {
-        width: number;
-        height: number;
-        constructor(width: number, height: number) {
-          this.width = width;
-          this.height = height;
-        }
-        getContext = vi.fn(() => mockContext);
-        convertToBlob = vi.fn(() =>
+      vi.fn((width, height) => ({
+        width,
+        height,
+        getContext(contextType: string) {
+          if (contextType === '2d') {
+            return mockContext; // Dynamically return the current mockContext
+          }
+          return null;
+        },
+        convertToBlob: vi.fn(() =>
           Promise.resolve(new Blob(['rotated content']))
-        );
-      }
+        ),
+      }))
     );
   });
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockContext.translate.mockClear();
-    mockContext.scale.mockClear();
-    mockContext.rotate.mockClear();
-    mockContext.drawImage.mockClear();
-    // @ts-expect-error - Resetting static property
-    (Blob as any).shouldReject = false;
+    mockContext = {
+      translate: vi.fn(),
+      scale: vi.fn(),
+      rotate: vi.fn(),
+      drawImage: vi.fn(),
+    };
+    (MockBlob as typeof MockBlob).shouldReject = false;
   });
-
   describe('getOrientation', () => {
     it('should return orientation from EXIF data', async () => {
       const buffer = createJpegWithExifOrientation(6);
@@ -112,8 +112,7 @@ describe('exifUtils', () => {
 
     it('should return -1 if arrayBuffer read fails', async () => {
       const mockFile = new Blob(['some data'], { type: 'image/jpeg' });
-      // @ts-expect-error - Accessing static property for test control
-      (Blob as any).shouldReject = true;
+      (MockBlob as typeof MockBlob).shouldReject = true;
       const orientation = await exifUtils.getOrientation(mockFile);
       expect(orientation).toBe(-1);
     });
@@ -135,7 +134,11 @@ describe('exifUtils', () => {
 
       expect(mockContext.translate).toHaveBeenCalledWith(100, 0);
       expect(mockContext.rotate).toHaveBeenCalledWith(0.5 * Math.PI);
-      expect(mockContext.drawImage).toHaveBeenCalledWith(expect.any(Object), 0, 0);
+      expect(mockContext.drawImage).toHaveBeenCalledWith(
+        expect.any(Object),
+        0,
+        0
+      );
 
       expect(resultBlob).toBeInstanceOf(Blob);
       const text = await resultBlob.text();

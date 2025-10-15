@@ -1,5 +1,11 @@
 import React, { Suspense } from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from '@testing-library/react';
 import { vi } from 'vitest';
 import MeasurePage from './MeasurePage';
 import { useMeasureStore } from '../store/measureStore';

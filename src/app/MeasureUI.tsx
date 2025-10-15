@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { createPortal } from 'react-dom';
 import { useMeasureStore } from '../store/measureStore';
 import { formatMeasurement } from '../core/measure/format';
@@ -7,7 +8,11 @@ interface MeasureUIProps {
   onToggleCameraFacingMode: () => void;
 }
 
-const MeasureUIComponent: React.FC<MeasureUIProps> = ({ onStartARSession, onToggleCameraFacingMode }) => { // propsを受け取る
+const MeasureUIComponent: React.FC<MeasureUIProps> = ({
+  onStartARSession,
+  onToggleCameraFacingMode,
+}) => {
+  // propsを受け取る
   const {
     points3d,
     measurement,
@@ -48,7 +53,8 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({ onStartARSession, onTogg
             className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             onClick={(e) => {
               e.stopPropagation();
-              if (onStartARSession) { // ガードを追加
+              if (onStartARSession) {
+                // ガードを追加
                 onStartARSession();
               }
             }}

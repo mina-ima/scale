@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import HomePage from './app/HomePage';
-import MeasurePage from './app/MeasurePage';
-import GrowthRecordPage from './app/GrowthRecordPage';
 import { useMeasureStore } from './store/measureStore';
+
+const MeasurePage = lazy(() => import('./app/MeasurePage'));
+const GrowthRecordPage = lazy(() => import('./app/GrowthRecordPage'));
 
 function App() {
   const { setScale } = useMeasureStore();
@@ -16,11 +17,13 @@ function App() {
   }, [setScale]);
 
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/measure" element={<MeasurePage />} />
-      <Route path="/growth-record" element={<GrowthRecordPage />} />
-    </Routes>
+    <Suspense fallback={<div>Loading...</div>}>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/measure" element={<MeasurePage />} />
+        <Route path="/growth-record" element={<GrowthRecordPage />} />
+      </Routes>
+    </Suspense>
   );
 }
 

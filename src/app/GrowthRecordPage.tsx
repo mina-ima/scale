@@ -54,8 +54,8 @@ const GrowthRecordPage: React.FC = () => {
       label: '体重',
       content: (
         <WeightInputForm
-          onSubmit={(message) => {
-            setToastMessage(message);
+          onSubmit={(weight) => {
+            setToastMessage(`体重 ${weight} kg を記録しました。`);
             setShowToast(true);
           }}
         />

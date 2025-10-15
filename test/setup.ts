@@ -10,6 +10,14 @@ beforeAll(() => {
   document.body.appendChild(arOverlay);
 });
 
+const ctxMock = {
+  translate: vi.fn(),
+  scale: vi.fn(),
+  rotate: vi.fn(),
+  drawImage: vi.fn(),
+  // Add other necessary 2D context methods if needed by tests
+};
+
 vi.stubGlobal(
   'HTMLCanvasElement',
   class MockHTMLCanvasElement extends HTMLElement {
@@ -32,5 +40,3 @@ vi.stubGlobal(
     height = 150; // Default height for testing
   }
 );
-
-const ctxMock = {};

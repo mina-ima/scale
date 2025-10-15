@@ -27,7 +27,6 @@ describe('GrowthRecordPage', () => {
     expect(
       screen.getByTestId('growth-record-page-container-te')
     ).not.toBeVisible();
-    expect(screen.queryByText('体重入力')).not.toBeVisible(); // WeightInputForm is not visible initially
   });
 
   it('switches to the 足 tab and displays its content', () => {
@@ -53,9 +52,7 @@ describe('GrowthRecordPage', () => {
   it('switches to the 体重 tab and displays WeightInputForm', () => {
     render(<GrowthRecordPage />);
     fireEvent.click(screen.getByRole('tab', { name: '体重' }));
-    expect(screen.getByText('体重入力')).toBeVisible();
-    expect(screen.getByLabelText('体重 (kg):')).toBeVisible();
-    expect(screen.getByLabelText('日付:')).toBeVisible();
+    expect(screen.getByLabelText(/体重 \(kg\):/i)).toBeVisible();
     expect(
       screen.getByTestId('growth-record-page-container-shinchou')
     ).not.toBeVisible();

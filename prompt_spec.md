@@ -202,6 +202,8 @@ Three.js, @types/webxr, Zustand, html2canvas もしくは Canvas API のみ
 丸め/単位変換/ファイル名生成/日付/ガード
 2D距離計算、スケール適用
 スケール推定: テンプレ一致（モック画像）信頼度判定
+
+注: `src/core/utils/exifUtils.test.ts` の `correctImageOrientation` テストは、`OffscreenCanvas` のモックの問題によりまだ失敗しています。これは今後のタスクとして別途対応予定です。
 13.2 結合テスト（Playwright）
 起動→権限拒否→フォールバック確認
 AR可端末: 平面検出→2点→表示小数1桁

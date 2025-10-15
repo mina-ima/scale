@@ -27,7 +27,9 @@ test.describe('Black Screen Issue Investigation', () => {
     await page.goto('/measure', { waitUntil: 'networkidle' });
   });
 
-  test('should display fallback camera view (video element) when AR is not available', async ({ page }) => {
+  test('should display fallback camera view (video element) when AR is not available', async ({
+    page,
+  }) => {
     // Expect a video element to be visible, indicating the fallback camera is active.
     const videoElement = page.locator('video');
     await expect(videoElement).toBeVisible({ timeout: 10000 });
