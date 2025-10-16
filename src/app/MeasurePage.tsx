@@ -278,6 +278,7 @@ const MeasurePage: React.FC = () => {
       points3d,
       addPoint3d,
       clearPoints,
+      initialPrevTime: performance.now(), // Pass current time for initialPrevTime
     });
 
     renderer.setAnimationLoop(renderLoop);

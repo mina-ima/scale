@@ -32,29 +32,61 @@ export const createRenderLoop = ({
 }: CreateRenderLoopParams & { initialFrameCount?: number; initialPrevTime?: number }) => {
   let frameCount = initialFrameCount;
   let prevTime = initialPrevTime;
+  let lastRenderTime = performance.now(); // Initialize lastRenderTime with current time
 
-          const renderLoop = (timestamp: number, frame: XRFrame) => {
+  const renderLoop = (timestamp: number, frame: XRFrame) => {
+    frameCount++;
+    const currentTime = timestamp;
+    const deltaTime = currentTime - prevTime;
 
-            frameCount++;
+    if (deltaTime >= 1000) {
+      // Update FPS every second
+      const fps = Math.round((frameCount * 1000) / deltaTime);
+      console.log(`FPS: ${fps}`);
+      frameCount = 0;
+      prevTime = currentTime;
+    }
 
-            const currentTime = performance.now();
+    // Rendering logic with throttling
+    const MIN_RENDER_INTERVAL = 1000 / 24; // Target 24 FPS
 
-            const deltaTime = currentTime - prevTime;
+    if (currentTime - lastRenderTime >= MIN_RENDER_INTERVAL) {
+      lastRenderTime = currentTime;
 
-      
+      const referenceSpace = renderer.xr.getReferenceSpace();
 
-            if (deltaTime >= 1000) {
+      if (import.meta.env.MODE === 'development') {
+        if (reticleRef.current) {
+          reticleRef.current.visible = true;
+        }
+        setIsPlaneDetected(true);
+      } else if (hitTestSource && referenceSpace) {
+        const hitTestResults = frame.getHitTestResults(hitTestSource);
+        if (hitTestResults.length > 0) {
+          const hit = hitTestResults[0];
+          const pose = hit.getPose(referenceSpace);
+          if (pose && reticleRef.current) {
+            reticleRef.current.visible = true;
+            reticleRef.current.matrix.fromArray(pose.transform.matrix);
+            setIsPlaneDetected(true);
 
-              // Update FPS every second
-
-              const fps = Math.round((frameCount * 1000) / deltaTime);
-
-              console.log(`FPS: ${fps}`);
-
-              frameCount = 0;
-
-              prevTime = currentTime;
-
-            }  };
+            if (isTapping) {
+              const currentReticleMesh: THREE.Mesh = reticleRef.current;
+              const point = new THREE.Vector3();
+              point.setFromMatrixPosition(currentReticleMesh.matrix);
+              if (points3d.length >= 2) clearPoints();
+              addPoint3d({ x: point.x, y: point.y, z: point.z });
+            }
+          }
+        } else {
+          if (reticleRef.current) {
+            reticleRef.current.visible = false;
+          }
+          setIsPlaneDetected(false);
+        }
+      }
+      renderer.render(scene, camera);
+    }
+  };
   return renderLoop;
 };

@@ -171,6 +171,9 @@ describe('MeasurePage', () => {
   const mockIsWebXRAvailable = isWebXRAvailable as Mock;
   let drawMeasurementLineSpy: MockInstance;
   let drawMeasurementLabelSpy: MockInstance;
+  let renderSpy: MockInstance; // Declare renderSpy at a higher scope
+  let performanceNowSpy: MockInstance; // Declare performanceNowSpy at a higher scope
+  let mockTime: number; // Declare mockTime at a higher scope
 
   beforeEach(() => {
     // Reset the store and mocks before each test
@@ -192,6 +195,15 @@ describe('MeasurePage', () => {
     // Spy on drawMeasurement functions
     drawMeasurementLineSpy = vi.spyOn(drawMeasurement, 'drawMeasurementLine');
     drawMeasurementLabelSpy = vi.spyOn(drawMeasurement, 'drawMeasurementLabel');
+
+    // Initialize mocks for FPS test
+    renderSpy = vi.spyOn(mockWebGLRendererInstance, 'render');
+    performanceNowSpy = vi.spyOn(performance, 'now');
+    mockTime = 50; // Reset mockTime for each test
+    performanceNowSpy.mockImplementation(() => {
+      mockTime += 1000 / 15; // Simulate ~15 FPS (below 24 FPS)
+      return mockTime;
+    });
   });
 
   afterEach(() => {
@@ -406,14 +418,6 @@ describe('MeasurePage', () => {
 
   it('should log FPS to console when AR session is active', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const performanceNowSpy = vi.spyOn(performance, 'now');
-
-    // Mock performance.now to simulate time passing
-    let mockTime = 0;
-    performanceNowSpy.mockImplementation(() => {
-      mockTime += 1000 / 60; // Simulate 60 FPS
-      return mockTime;
-    });
 
     // Mock dependencies for createRenderLoop
     const mockScene = new THREE.Scene();
@@ -434,7 +438,71 @@ describe('MeasurePage', () => {
     const mockAddPoint3d = vi.fn();
     const mockClearPoints = vi.fn();
 
+    // Mock performance.now to simulate time passing
+    mockTime = 0; // Reset mockTime for each test
+    performanceNowSpy.mockImplementation(() => {
+      mockTime += 1000 / 60; // Simulate ~60 FPS for the test environment
+      return mockTime;
+    });
+
     // Create the renderLoop using the utility function
+    const renderLoop = createRenderLoop({
+      scene: mockScene,
+      camera: mockCamera,
+      renderer: mockRenderer,
+      reticleRef: mockReticleRef,
+      hitTestSource: mockHitTestSource,
+      setIsPlaneDetected: mockSetIsPlaneDetected,
+      isTapping: mockIsTapping,
+      points3d: mockPoints3d,
+      addPoint3d: mockAddPoint3d,
+      clearPoints: mockClearPoints,
+      initialFrameCount: 0,
+      initialPrevTime: 0, // Pass 0 as initialPrevTime for consistent testing
+    });
+
+    // Simulate multiple frames to trigger FPS calculation
+    const numFramesToSimulate = 61; // Simulate slightly more than 1 second
+    const mockXRFrame = {
+      getHitTestResults: vi.fn(() => []), // Mock the method
+    } as unknown as XRFrame;
+    for (let i = 0; i < numFramesToSimulate; i++) {
+      renderLoop(performance.now(), mockXRFrame);
+    }
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('FPS:'));
+
+    consoleSpy.mockRestore();
+    performanceNowSpy.mockRestore();
+  }, 15000);
+
+  it('should throttle rendering to ~24fps when device FPS is high', async () => {
+    // Mock dependencies for createRenderLoop
+    const mockScene = new THREE.Scene();
+    const mockCamera = new THREE.PerspectiveCamera();
+    const mockRenderer = {
+      xr: {
+        isPresenting: true,
+        getReferenceSpace: vi.fn(() => ({})),
+      },
+      render: renderSpy, // Use the spy here
+      setAnimationLoop: vi.fn(),
+    } as unknown as THREE.WebGLRenderer;
+    const mockReticleRef = { current: new THREE.Mesh() };
+    const mockHitTestSource = {} as XRHitTestSource;
+    const mockSetIsPlaneDetected = vi.fn();
+    const mockIsTapping = false;
+    const mockPoints3d: { x: number; y: number; z: number }[] = [];
+    const mockAddPoint3d = vi.fn();
+    const mockClearPoints = vi.fn();
+
+    // Mock performance.now to simulate a high frame rate (~60 FPS)
+    mockTime = 0;
+    performanceNowSpy.mockImplementation(() => {
+      mockTime += 1000 / 60; // Simulate ~60 FPS
+      return mockTime;
+    });
+
     const renderLoop = createRenderLoop({
       scene: mockScene,
       camera: mockCamera,
@@ -450,20 +518,25 @@ describe('MeasurePage', () => {
       initialPrevTime: 0,
     });
 
-    // Simulate multiple frames to trigger FPS calculation
-    const numFramesToSimulate = 61; // Simulate slightly more than 1 second
-    let timestamp = 0;
+    const numFramesToSimulate = 120; // Simulate for 2 seconds
     const mockXRFrame = {
-      getHitTestResults: vi.fn(() => []), // Mock the method
+      getHitTestResults: vi.fn(() => []),
     } as unknown as XRFrame;
+
     for (let i = 0; i < numFramesToSimulate; i++) {
-      timestamp += 1000 / 60; // Increment timestamp by ~16.67ms
-      renderLoop(timestamp, mockXRFrame);
+      renderLoop(performance.now(), mockXRFrame);
     }
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('FPS:'));
+    // At 60 FPS, we simulate 120 frames over 2 seconds.
+    // The rendering is throttled to a maximum of 24 FPS.
+    // So, we expect approximately 2 * 24 = 48 render calls.
+    const expectedRenders = 40; // 120 frames / (60fps / 24fps) = 40
 
-    consoleSpy.mockRestore();
+    expect(renderSpy.mock.calls.length).toBeLessThan(numFramesToSimulate);
+    // With the corrected timestamp logic, the number of renders should be very predictable.
+    expect(renderSpy.mock.calls.length).toBeCloseTo(expectedRenders, 0);
+
+    renderSpy.mockRestore();
     performanceNowSpy.mockRestore();
   }, 15000);
 });
