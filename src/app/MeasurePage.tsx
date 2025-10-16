@@ -7,6 +7,12 @@ import { useCamera } from '../core/camera/useCamera';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
 import { isDistanceExceeded } from '../core/measure/maxDistanceGuard';
 import MeasureUIComponent from './MeasureUI';
+import { formatMeasurement } from '../core/measure/format';
+import {
+  drawMeasurementLine,
+  drawMeasurementLabel,
+} from '../core/render/drawMeasurement';
+import { createRenderLoop } from '../core/ar/renderLoopUtils';
 
 const MeasurePage: React.FC = () => {
   console.log('MeasurePage: rendered');
@@ -172,6 +178,38 @@ const MeasurePage: React.FC = () => {
   }, [points, scale, setMeasurement, unit]);
 
   useEffect(() => {
+    if (xrSession) return; // Only run in fallback mode
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    // Clear canvas before drawing
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (points.length === 2 && useMeasureStore.getState().measurement) {
+      const { measurement } = useMeasureStore.getState();
+      drawMeasurementLine(context, points[0], points[1]);
+      const labelPosition = {
+        x: (points[0].x + points[1].x) / 2,
+        y: (points[0].y + points[1].y) / 2,
+      };
+      const formatted = formatMeasurement(
+        measurement!.valueMm!,
+        measurement!.unit
+      );
+      drawMeasurementLabel(
+        context,
+        formatted,
+        labelPosition.x,
+        labelPosition.y
+      );
+    }
+  }, [points, xrSession]);
+
+  useEffect(() => {
     if (!xrSession || !rendererRef.current) return;
 
     const renderer = rendererRef.current;
@@ -229,51 +267,18 @@ const MeasurePage: React.FC = () => {
       reticle.visible = true;
     }
 
-    const renderLoop = (timestamp: number, frame: XRFrame) => {
-      if (!frame || !renderer.xr.isPresenting) return;
-
-      const referenceSpace = renderer.xr.getReferenceSpace();
-      if (!referenceSpace) return;
-
-      if (import.meta.env.MODE === 'development') {
-        // In development mode, always show reticle if AR session is active
-        if (reticleRef.current) {
-          reticleRef.current.visible = true;
-        }
-        setIsPlaneDetected(true);
-      } else if (hitTestSource) {
-        const hitTestResults = frame.getHitTestResults(hitTestSource);
-        if (hitTestResults.length > 0) {
-          const hit = hitTestResults[0];
-          const pose = hit.getPose(referenceSpace);
-          if (pose && reticleRef.current) {
-            reticleRef.current.visible = true;
-            reticleRef.current.matrix.fromArray(pose.transform.matrix);
-            setIsPlaneDetected(true);
-            // console.log('Plane detected.'); // Log only when a plane is detected
-
-            if (isTapping) {
-              if (reticleRef.current) {
-                const currentReticleMesh: THREE.Mesh = reticleRef.current;
-                const point = new THREE.Vector3();
-                point.setFromMatrixPosition(currentReticleMesh.matrix);
-                if (points3d.length >= 2) clearPoints();
-                addPoint3d({ x: point.x, y: point.y, z: point.z });
-                setIsTapping(false);
-              }
-            }
-          }
-        } else {
-          if (reticleRef.current) {
-            reticleRef.current.visible = false;
-          }
-          setIsPlaneDetected(false);
-          // console.log('No plane detected.'); // Log only when no plane is detected
-        }
-      }
-      // End of else if (hitTestSource) block
-      renderer.render(scene, camera);
-    };
+    const renderLoop = createRenderLoop({
+      scene,
+      camera,
+      renderer,
+      reticleRef,
+      hitTestSource,
+      setIsPlaneDetected,
+      isTapping,
+      points3d,
+      addPoint3d,
+      clearPoints,
+    });
 
     renderer.setAnimationLoop(renderLoop);
 
@@ -291,8 +296,12 @@ const MeasurePage: React.FC = () => {
     isTapping,
     addPoint3d,
     clearPoints,
-    points3d.length,
+    points3d,
     setIsPlaneDetected,
+    sceneRef,
+    cameraRef,
+    rendererRef,
+    reticleRef,
   ]);
 
   useEffect(() => {

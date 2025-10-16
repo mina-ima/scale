@@ -179,9 +179,12 @@ function rawScanOrientationInApp1(
 
 // ---- correctImageOrientation --------------------------------------------
 
-export async function correctImageOrientation(blob: Blob): Promise<Blob> {
+export async function correctImageOrientation(
+  blob: Blob,
+  getOrientationFn = getOrientation
+): Promise<Blob> {
   try {
-    const orientation = await getOrientation(blob);
+    const orientation = await getOrientationFn(blob);
     if (orientation <= 0 || orientation === 1) return blob;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

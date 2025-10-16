@@ -9,7 +9,7 @@
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "dev": "vite",
     "build": "vite build",
     "tailwind-init": "tailwindcss init -p"

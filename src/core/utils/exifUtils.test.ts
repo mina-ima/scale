@@ -1,5 +1,5 @@
 // src/core/utils/exifUtils.test.ts
-import { vi, it, describe, expect, beforeAll, beforeEach } from 'vitest';
+import { vi, it, describe, expect, beforeEach, type Mock } from 'vitest';
 import * as exifUtils from './exifUtils';
 import { createJpegWithExifOrientation } from '../../test-helpers/createJpegWithExif';
 
@@ -35,60 +35,25 @@ class MockBlob extends Blob {
       }
       return this.#buffer;
     });
+
+    this.text = vi.fn(async () => {
+      const buffer = await this.arrayBuffer();
+      return new TextDecoder().decode(buffer);
+    });
   }
 }
 
-vi.stubGlobal('Blob', MockBlob);
-
-vi.stubGlobal(
-  'createImageBitmap',
-  vi.fn(() =>
-    Promise.resolve({
-      width: 100,
-      height: 100,
-      close: vi.fn(),
-    })
-  )
-);
-
 describe('exifUtils', () => {
-  let mockContext: {
-    translate: ReturnType<typeof vi.fn>;
-    scale: ReturnType<typeof vi.fn>;
-    rotate: ReturnType<typeof vi.fn>;
-    drawImage: ReturnType<typeof vi.fn>;
-  };
-
-  beforeAll(() => {
-    vi.stubGlobal(
-      'OffscreenCanvas',
-      vi.fn((width, height) => ({
-        width,
-        height,
-        getContext(contextType: string) {
-          if (contextType === '2d') {
-            return mockContext; // Dynamically return the current mockContext
-          }
-          return null;
-        },
-        convertToBlob: vi.fn(() =>
-          Promise.resolve(new Blob(['rotated content']))
-        ),
-      }))
-    );
-  });
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    mockContext = {
-      translate: vi.fn(),
-      scale: vi.fn(),
-      rotate: vi.fn(),
-      drawImage: vi.fn(),
-    };
-    (MockBlob as typeof MockBlob).shouldReject = false;
-  });
   describe('getOrientation', () => {
+    beforeEach(() => {
+      vi.stubGlobal('Blob', MockBlob);
+      (MockBlob as typeof MockBlob).shouldReject = false;
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
     it('should return orientation from EXIF data', async () => {
       const buffer = createJpegWithExifOrientation(6);
       const mockFile = new Blob([new Uint8Array(buffer)], {
@@ -119,19 +84,75 @@ describe('exifUtils', () => {
   });
 
   describe('correctImageOrientation', () => {
+    let mockContext: {
+      translate: Mock;
+      scale: Mock;
+      rotate: Mock;
+      drawImage: Mock;
+    };
+
+    beforeEach(() => {
+      mockContext = {
+        translate: vi.fn(),
+        scale: vi.fn(),
+        rotate: vi.fn(),
+        drawImage: vi.fn(),
+      };
+      vi.stubGlobal('Blob', MockBlob);
+      vi.stubGlobal(
+        'createImageBitmap',
+        vi.fn(() =>
+          Promise.resolve({
+            width: 100,
+            height: 100,
+            close: vi.fn(),
+          })
+        )
+      );
+      vi.stubGlobal(
+        'OffscreenCanvas',
+        vi.fn((width, height) => ({
+          width,
+          height,
+          getContext(contextType: string) {
+            if (contextType === '2d') {
+              return mockContext;
+            }
+            return null;
+          },
+          convertToBlob: vi.fn(() =>
+            Promise.resolve(new Blob(['rotated content']))
+          ),
+        }))
+      );
+      (MockBlob as typeof MockBlob).shouldReject = false;
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
     it('should return the original blob if orientation is 1 (normal)', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
-      vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(1);
-      const result = await exifUtils.correctImageOrientation(mockFile);
+      const mockGetOrientation = vi.fn().mockResolvedValue(1);
+      const result = await exifUtils.correctImageOrientation(
+        mockFile,
+        mockGetOrientation
+      );
       expect(result).toBe(mockFile);
+      expect(mockGetOrientation).toHaveBeenCalled();
     });
 
     it('should return a rotated blob if orientation is 6 (90 deg CW)', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
-      vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(6);
+      const mockGetOrientation = vi.fn().mockResolvedValue(6);
 
-      const resultBlob = await exifUtils.correctImageOrientation(mockFile);
+      const resultBlob = await exifUtils.correctImageOrientation(
+        mockFile,
+        mockGetOrientation
+      );
 
+      expect(mockGetOrientation).toHaveBeenCalledWith(mockFile);
       expect(mockContext.translate).toHaveBeenCalledWith(100, 0);
       expect(mockContext.rotate).toHaveBeenCalledWith(0.5 * Math.PI);
       expect(mockContext.drawImage).toHaveBeenCalledWith(
@@ -147,9 +168,13 @@ describe('exifUtils', () => {
 
     it('should handle images without EXIF data gracefully', async () => {
       const mockFile = new Blob(['original content'], { type: 'image/jpeg' });
-      vi.spyOn(exifUtils, 'getOrientation').mockResolvedValue(-1);
-      const result = await exifUtils.correctImageOrientation(mockFile);
+      const mockGetOrientation = vi.fn().mockResolvedValue(-1);
+      const result = await exifUtils.correctImageOrientation(
+        mockFile,
+        mockGetOrientation
+      );
       expect(result).toBe(mockFile);
+      expect(mockGetOrientation).toHaveBeenCalled();
     });
   });
 });

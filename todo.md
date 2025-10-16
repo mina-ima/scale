@@ -155,8 +155,6 @@
 - [x] 再計測で線が1本のみ維持されるよう修正。
 - [x] 10m 超過エラー。
 
-注: `src/core/utils/exifUtils.test.ts` の `correctImageOrientation` テストは、モックの問題によりまだ失敗しています。これは今後のタスクとして別途対応予定です。
-
 ## 18. 端末/環境マトリクス検証（P1）
 
 - [ ] Android/Chrome（HD/FHD/WQHD）。

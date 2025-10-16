@@ -1,7 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "types": ["vitest/globals", "webxr", "node"],
-    "typeRoots": ["./node_modules/@types", "./src/types"]
-  }
+  "compilerOptions": {},
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "e2e/**/*.spec.ts",
+    "setupTests.ts"
+  ]
 }

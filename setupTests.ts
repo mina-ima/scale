@@ -1,5 +1,8 @@
+/// <reference types="vitest/globals" />
+
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { Canvas } from 'canvas';
 
 // Mock for window.URL.createObjectURL, which is not implemented in JSDOM
 if (typeof window.URL.createObjectURL === 'undefined') {
@@ -34,3 +37,17 @@ if (typeof window.cancelAnimationFrame === 'undefined') {
     value: vi.fn(),
   });
 }
+
+// Mock for HTMLCanvasElement.getContext
+Object.defineProperty(window.HTMLCanvasElement.prototype, 'getContext', {
+  value: function (contextType: string) {
+    if (contextType === '2d') {
+      // Create a new canvas instance for each getContext call
+      const canvas = new Canvas(this.width, this.height);
+      return canvas.getContext('2d');
+    }
+    // Return null for other contexts like 'webgl' if not needed
+    return null;
+  },
+  writable: true,
+});

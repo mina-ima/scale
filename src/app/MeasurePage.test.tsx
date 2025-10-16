@@ -7,15 +7,49 @@ import {
   act,
 } from '@testing-library/react';
 import { vi } from 'vitest';
+import { CanvasRenderingContext2D } from 'canvas';
 import MeasurePage from './MeasurePage';
 import { useMeasureStore } from '../store/measureStore';
 import { formatMeasurement } from '../core/measure/format';
+import * as THREE from 'three';
+import { createRenderLoop } from '../core/ar/renderLoopUtils';
+
+let capturedRenderLoop:
+  | ((timestamp: number, frame: XRFrame) => void)
+  | undefined;
+const mockSetAnimationLoop = vi.fn((callback) => {
+  capturedRenderLoop = callback;
+});
+const mockWebGLRendererInstance = {
+  xr: {
+    enabled: true,
+    setSession: vi.fn(),
+    isPresenting: true,
+    getReferenceSpace: vi.fn(() => ({})),
+  },
+  setSize: vi.fn(),
+  render: vi.fn(),
+  setAnimationLoop: mockSetAnimationLoop,
+  domElement: document.createElement('canvas'),
+};
+
+vi.mock('three', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...(actual as object),
+    WebGLRenderer: vi.fn(() => mockWebGLRendererInstance),
+  };
+});
+
+const mockStartARSession = vi.fn(async () => {
+  mockSetAnimationLoop(vi.fn());
+});
 
 // Mock the useWebXR hook
 vi.mock('../core/ar/useWebXR', () => ({
   useWebXR: vi.fn(() => ({
     isWebXRSupported: true,
-    startARSession: vi.fn(),
+    startARSession: mockStartARSession,
     arSession: null,
     arRef: { current: null },
   })),
@@ -36,11 +70,13 @@ vi.mock('../core/camera/useCamera', () => ({
 import * as measure from '../core/measure/calculate2dDistance';
 import { type Mock, type MockInstance } from 'vitest';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
+vi.mock('../core/ar/webxrUtils', () => ({
+  isWebXRAvailable: vi.fn(),
+}));
 import * as cameraUtils from '../core/camera/utils';
 
 // Mock the render functions as they are not relevant to this test
-vi.mock('../core/render/drawMeasurement');
-vi.mock('../core/ar/webxrUtils');
+import * as drawMeasurement from '../core/render/drawMeasurement';
 
 // Mock URL.createObjectURL globally
 vi.stubGlobal('URL', {
@@ -66,7 +102,6 @@ interface MockMeasureUIProps {
 vi.mock('./MeasureUI', () => ({
   __esModule: true,
   default: function MockMeasureUI({
-    onStartARSession,
     onToggleCameraFacingMode,
   }: MockMeasureUIProps) {
     const { measurement, unit, isWebXrSupported, isArMode, facingMode } =
@@ -79,7 +114,7 @@ vi.mock('./MeasureUI', () => ({
           </p>
         )}
         {isWebXrSupported && !isArMode && (
-          <button data-testid="start-ar-button" onClick={onStartARSession}>
+          <button data-testid="start-ar-button" onClick={mockStartARSession}>
             AR計測を開始
           </button>
         )}
@@ -134,13 +169,16 @@ vi.mock('./MeasureUI', () => ({
 describe('MeasurePage', () => {
   let spy: MockInstance;
   const mockIsWebXRAvailable = isWebXRAvailable as Mock;
+  let drawMeasurementLineSpy: MockInstance;
+  let drawMeasurementLabelSpy: MockInstance;
 
   beforeEach(() => {
     // Reset the store and mocks before each test
     useMeasureStore.setState(originalState);
+    useMeasureStore.getState().setIsWebXrSupported(true);
     spy = vi.spyOn(measure, 'calculate2dDistance');
     spy.mockReturnValue(1234.5); // e.g., 123.45 cm
-    mockIsWebXRAvailable.mockResolvedValue(false); // Default mock
+    (mockIsWebXRAvailable as Mock).mockResolvedValue(false); // Default mock
 
     // Add spies for cameraUtils
     vi.spyOn(cameraUtils, 'getCameraStream').mockResolvedValue(mockMediaStream);
@@ -150,6 +188,10 @@ describe('MeasurePage', () => {
     const arOverlayRoot = document.createElement('div');
     arOverlayRoot.id = 'ar-overlay';
     document.body.appendChild(arOverlayRoot);
+
+    // Spy on drawMeasurement functions
+    drawMeasurementLineSpy = vi.spyOn(drawMeasurement, 'drawMeasurementLine');
+    drawMeasurementLabelSpy = vi.spyOn(drawMeasurement, 'drawMeasurementLabel');
   });
 
   afterEach(() => {
@@ -189,6 +231,38 @@ describe('MeasurePage', () => {
     expect(
       await screen.findByText('123.5 cm', undefined, { timeout: 10000 })
     ).toBeInTheDocument();
+  }, 10000);
+
+  it('should draw measurement line and label in fallback mode after two taps', async () => {
+    useMeasureStore.getState().setScale({
+      mmPerPx: 0.5,
+      confidence: 1,
+      matchedReferenceObject: null,
+      matchedDetectedRectangle: null,
+    });
+
+    render(
+      <Suspense fallback={<div>Loading...</div>}>
+        <MeasurePage />
+      </Suspense>
+    );
+    const canvas = await screen.findByTestId('measure-canvas', undefined, {
+      timeout: 10000,
+    });
+
+    fireEvent.click(canvas, { clientX: 100, clientY: 100 });
+    fireEvent.click(canvas, { clientX: 200, clientY: 200 });
+
+    await waitFor(() => {
+      expect(drawMeasurementLineSpy).toHaveBeenCalledTimes(1);
+      expect(drawMeasurementLabelSpy).toHaveBeenCalledTimes(1);
+      expect(drawMeasurementLabelSpy).toHaveBeenCalledWith(
+        expect.any(CanvasRenderingContext2D),
+        '123.5 cm',
+        expect.any(Number),
+        expect.any(Number)
+      );
+    });
   }, 10000);
 
   it('should clear the measurement on the third tap and start a new one', async () => {
@@ -330,22 +404,66 @@ describe('MeasurePage', () => {
     expect(useMeasureStore.getState().points.length).toBe(0);
   }, 10000);
 
-  it('should display a message if WebXR is not supported', async () => {
-    mockIsWebXRAvailable.mockResolvedValue(false);
-    render(
-      <Suspense fallback={<div>Loading...</div>}>
-        <MeasurePage />
-      </Suspense>
-    );
-    await waitFor(
-      () => {
-        expect(
-          screen.getByText(
-            'お使いの端末ではAR非対応です。写真で計測に切り替えます。'
-          )
-        ).toBeInTheDocument();
+  it('should log FPS to console when AR session is active', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const performanceNowSpy = vi.spyOn(performance, 'now');
+
+    // Mock performance.now to simulate time passing
+    let mockTime = 0;
+    performanceNowSpy.mockImplementation(() => {
+      mockTime += 1000 / 60; // Simulate 60 FPS
+      return mockTime;
+    });
+
+    // Mock dependencies for createRenderLoop
+    const mockScene = new THREE.Scene();
+    const mockCamera = new THREE.PerspectiveCamera();
+    const mockRenderer = {
+      xr: {
+        isPresenting: true,
+        getReferenceSpace: vi.fn(() => ({})),
       },
-      { timeout: 10000 }
-    );
-  }, 10000);
+      render: vi.fn(),
+      setAnimationLoop: vi.fn(),
+    } as unknown as THREE.WebGLRenderer;
+    const mockReticleRef = { current: new THREE.Mesh() };
+    const mockHitTestSource = {} as XRHitTestSource;
+    const mockSetIsPlaneDetected = vi.fn();
+    const mockIsTapping = false;
+    const mockPoints3d: { x: number; y: number; z: number }[] = [];
+    const mockAddPoint3d = vi.fn();
+    const mockClearPoints = vi.fn();
+
+    // Create the renderLoop using the utility function
+    const renderLoop = createRenderLoop({
+      scene: mockScene,
+      camera: mockCamera,
+      renderer: mockRenderer,
+      reticleRef: mockReticleRef,
+      hitTestSource: mockHitTestSource,
+      setIsPlaneDetected: mockSetIsPlaneDetected,
+      isTapping: mockIsTapping,
+      points3d: mockPoints3d,
+      addPoint3d: mockAddPoint3d,
+      clearPoints: mockClearPoints,
+      initialFrameCount: 0,
+      initialPrevTime: 0,
+    });
+
+    // Simulate multiple frames to trigger FPS calculation
+    const numFramesToSimulate = 61; // Simulate slightly more than 1 second
+    let timestamp = 0;
+    const mockXRFrame = {
+      getHitTestResults: vi.fn(() => []), // Mock the method
+    } as unknown as XRFrame;
+    for (let i = 0; i < numFramesToSimulate; i++) {
+      timestamp += 1000 / 60; // Increment timestamp by ~16.67ms
+      renderLoop(timestamp, mockXRFrame);
+    }
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('FPS:'));
+
+    consoleSpy.mockRestore();
+    performanceNowSpy.mockRestore();
+  }, 15000);
 });

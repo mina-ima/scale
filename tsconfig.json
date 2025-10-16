@@ -25,5 +25,6 @@
     "src/types/file-system-access.d.ts",
     "setupTests.ts"
   ],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "e2e/**"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

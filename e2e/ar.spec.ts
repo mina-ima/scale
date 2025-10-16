@@ -237,4 +237,43 @@ test.describe('AR Mode', () => {
     // Expect the measurement to be displayed as 12.8 cm (rounded from 12.8)
     await expect(page.getByText('12.8 cm')).toBeVisible();
   });
+
+  test('should maintain a minimum of 24 FPS during AR measurement', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+
+    // Wait for AR session to be active
+    await page.waitForFunction(() => {
+      // @ts-expect-error - Test-only access to internal state
+      const measureStore = window.useMeasureStore.getState();
+      return (
+        measureStore.xrSession !== null && measureStore.xrHitTestSource !== null
+      );
+    });
+
+    // Measure FPS over a period of time
+    const measuredFps = await page.evaluate(async () => {
+      return new Promise((resolve) => {
+        let frameCount = 0;
+        const duration = 1000; // 1 second
+        const startTime = performance.now();
+
+        function countFrames() {
+          frameCount++;
+          const elapsedTime = performance.now() - startTime;
+          if (elapsedTime < duration) {
+            requestAnimationFrame(countFrames);
+          } else {
+            const fps = frameCount / (elapsedTime / 1000);
+            resolve(fps);
+          }
+        }
+        countFrames();
+      });
+    });
+
+    console.log(`Measured FPS: ${measuredFps}`);
+    expect(measuredFps).toBeGreaterThanOrEqual(24);
+  });
 });
