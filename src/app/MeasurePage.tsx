@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react';
 import * as THREE from 'three';
 import { useMeasureStore } from '../store/measureStore';
 import { calculate2dDistance } from '../core/measure/calculate2dDistance';
@@ -18,15 +18,11 @@ const MeasurePage: React.FC = () => {
   const canvas2dRef = useRef<HTMLCanvasElement>(null);
   const canvasWebGLRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // ← 写真選択用
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef(new THREE.Scene());
   const cameraRef = useRef(
-    new THREE.PerspectiveCamera(
-      70,
-      window.innerWidth / window.innerHeight,
-      0.01,
-      20
-    )
+    new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20)
   );
   const lineRef = useRef<THREE.Line | null>(null);
   const reticleRef = useRef<THREE.Mesh | null>(null);
@@ -49,44 +45,119 @@ const MeasurePage: React.FC = () => {
     setIsArMode,
     isArMode,
     setError,
-    error: globalError, // グローバルエラー（useCameraのerrorと名前衝突回避）
+    error: globalError,
   } = useMeasureStore();
 
   console.log('MeasurePage: rendered', { isArMode, globalError });
 
   const { stream, error: cameraError, toggleCameraFacingMode } = useCamera();
 
-  // --- カメラストリームの反映 ---
+  // --- カメラストリームの管理 ---
   useEffect(() => {
     console.log('MeasurePage: useEffect triggered with stream:', stream, 'cameraError:', cameraError);
+
     if (cameraError) {
       setError(cameraError);
       setIsArMode(false);
       return;
     }
-    if (videoRef.current) {
-      console.log('MeasurePage: Current videoRef.current.srcObject:', videoRef.current.srcObject);
-      if (stream && videoRef.current.srcObject !== stream) {
-        console.log('MeasurePage: Setting videoRef.current.srcObject to new stream.');
-        videoRef.current.srcObject = stream;
-        videoRef.current
-          .play()
-          .then(() => {
-            console.log('MeasurePage: Video stream started successfully.');
-          })
-          .catch((e) => {
-            console.error('MeasurePage: Error playing video stream:', e);
-          });
-      } else if (!stream && videoRef.current.srcObject) {
-        // ストリームがnullになった場合、srcObjectをクリア
-        console.log('MeasurePage: Clearing videoRef.current.srcObject as stream is null.');
-        // @ts-expect-error - srcObject は null を受け取れる
-        videoRef.current.srcObject = null;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    console.log('MeasurePage: Current videoRef.current.srcObject:', video.srcObject);
+
+    // 同一ストリームなら何もしない
+    if (stream && video.srcObject === stream) return;
+
+    if (stream) {
+      console.log('MeasurePage: Setting videoRef.current.srcObject to new stream.');
+      // 旧ストリームを停止
+      const oldStream = video.srcObject as MediaStream | null;
+      if (oldStream && oldStream !== stream) {
+        oldStream.getTracks().forEach((t) => t.stop());
       }
+
+      // 新ストリームをセット
+      // @ts-expect-error - srcObject null/MediaStream 許容
+      video.srcObject = stream;
+
+      // Safari対策：canplay/loadedmetadata後に再生
+      const playSafely = async () => {
+        try {
+          await video.play();
+          console.log('MeasurePage: Video stream started successfully.');
+        } catch (e: any) {
+          if (e?.name !== 'AbortError') {
+            console.error('MeasurePage: Error playing video stream:', e);
+          }
+        }
+      };
+
+      if (video.readyState >= 2) {
+        playSafely();
+      } else {
+        const onCanPlay = () => {
+          video.removeEventListener('canplay', onCanPlay);
+          playSafely();
+        };
+        video.addEventListener('canplay', onCanPlay, { once: true });
+      }
+    } else if (!stream && video.srcObject) {
+      console.log('MeasurePage: Clearing videoRef.current.srcObject as stream is null.');
+      video.pause();
+      // @ts-expect-error - null 許容
+      video.srcObject = null;
     }
   }, [stream, cameraError, setError, setIsArMode]);
 
-  // --- 2D/AR のクリック処理 ---
+  // --- 写真計測: 撮影（背景Videoをキャンバスに転写）
+  const onCapturePhoto = useCallback(() => {
+    try {
+      const video = videoRef.current;
+      const canvas = canvas2dRef.current;
+      if (!video || !canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const w = video.videoWidth || window.innerWidth;
+      const h = video.videoHeight || window.innerHeight;
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+      // 以降は2D計測フロー（点打ち）
+      setIsArMode(false);
+      setError(null);
+    } catch (e) {
+      console.error('capturePhoto failed', e);
+      setError('写真の取得に失敗しました');
+    }
+  }, [setIsArMode, setError]);
+
+  // --- 写真計測: 端末から選択
+  const onPickPhoto = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onPhotoSelected = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = canvas2dRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      setIsArMode(false);
+      setError(null);
+    };
+    img.onerror = () => setError('画像の読み込みに失敗しました');
+    img.src = URL.createObjectURL(file);
+  }, [setIsArMode, setError]);
+
+  // --- クリック処理 ---
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (xrSession) {
@@ -119,7 +190,7 @@ const MeasurePage: React.FC = () => {
           mode: 'furniture',
           measurementMethod: 'ar',
           valueMm: distanceMm,
-          unit: unit,
+          unit,
           dateISO: new Date().toISOString(),
         });
       }
@@ -134,48 +205,43 @@ const MeasurePage: React.FC = () => {
         mode: 'furniture',
         measurementMethod: 'fallback',
         valueMm: distance,
-        unit: unit,
+        unit,
         dateISO: new Date().toISOString(),
       });
     }
   }, [points, scale, setMeasurement, unit]);
 
-  // --- 2D描画（フォールバック） ---
+  // --- 2D描画 ---
   useEffect(() => {
-    if (xrSession) return; // Only run in fallback mode
-
+    if (xrSession) return;
     const canvas = canvas2dRef.current;
     if (!canvas) return;
 
-    const context = canvas.getContext('2d');
-    if (!context) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    // Clear canvas before drawing
-    context.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (points.length === 2 && useMeasureStore.getState().measurement) {
       const { measurement } = useMeasureStore.getState();
-      drawMeasurementLine(context, points[0], points[1]);
-      const labelPosition = {
+      drawMeasurementLine(ctx, points[0], points[1]);
+      const labelPos = {
         x: (points[0].x + points[1].x) / 2,
         y: (points[0].y + points[1].y) / 2,
       };
-      const formatted = formatMeasurement(
-        measurement!.valueMm!,
-        measurement!.unit
-      );
-      drawMeasurementLabel(
-        context,
-        formatted,
-        labelPosition.x,
-        labelPosition.y
-      );
+      const formatted = formatMeasurement(measurement!.valueMm!, measurement!.unit);
+      drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
     }
   }, [points, xrSession]);
 
   // --- ARレンダーループ ---
   useEffect(() => {
-    console.log('MeasurePage useEffect for AR render loop:', { xrSession, rendererRef: rendererRef.current, sceneRef: sceneRef.current, cameraRef: cameraRef.current });
+    console.log('MeasurePage useEffect for AR render loop:', {
+      xrSession,
+      rendererRef: rendererRef.current,
+      sceneRef: sceneRef.current,
+      cameraRef: cameraRef.current,
+    });
     if (!xrSession || !rendererRef.current) return;
 
     const renderer = rendererRef.current;
@@ -194,25 +260,21 @@ const MeasurePage: React.FC = () => {
     let hitTestSource: XRHitTestSource | null = null;
 
     (async () => {
-      const currentXrSession = renderer.xr.getSession();
-      if (!currentXrSession) return;
-
+      const currentSession = renderer.xr.getSession();
+      if (!currentSession) return;
       try {
-        const viewerSpace = await currentXrSession.requestReferenceSpace('viewer' as XRReferenceSpaceType);
-        // @ts-expect-error - requestHitTestSource は型が環境依存
-        const source = await currentXrSession.requestHitTestSource?.({ space: viewerSpace });
+        const viewerSpace = await currentSession.requestReferenceSpace('viewer');
+        // @ts-expect-error - hit test may be experimental
+        const source = await currentSession.requestHitTestSource?.({ space: viewerSpace });
         if (source) {
-          hitTestSource = source as XRHitTestSource;
-          console.log('Hit test source requested successfully.', hitTestSource);
-        } else {
-          console.error('requestHitTestSource is not available in this session.');
+          hitTestSource = source;
+          console.log('Hit test source requested successfully.');
         }
       } catch (e) {
         console.error('Failed to request hit test source:', e);
       }
     })();
 
-    // Debug: 強制プレーン検出（開発時のみ）
     if (process.env.NODE_ENV === 'development') {
       setIsPlaneDetected(true);
       reticle.matrix.identity();
@@ -236,25 +298,13 @@ const MeasurePage: React.FC = () => {
 
     renderer.setAnimationLoop(renderLoop);
 
-    const currentRenderer = rendererRef.current;
     return () => {
-      if (reticleRef.current) {
-        scene.remove(reticleRef.current);
-      }
-      if (currentRenderer) {
-        currentRenderer.setAnimationLoop(null);
-      }
+      if (reticleRef.current) scene.remove(reticleRef.current);
+      renderer.setAnimationLoop(null);
     };
-  }, [
-    xrSession,
-    isTapping,
-    addPoint3d,
-    clearPoints,
-    points3d,
-    setIsPlaneDetected,
-  ]);
+  }, [xrSession, isTapping, addPoint3d, clearPoints, points3d, setIsPlaneDetected]);
 
-  // --- 3Dライン表示 ---
+  // --- 3Dライン描画 ---
   useEffect(() => {
     const scene = sceneRef.current;
     if (lineRef.current) {
@@ -262,48 +312,29 @@ const MeasurePage: React.FC = () => {
       lineRef.current = null;
     }
     if (points3d.length === 2) {
-      const geometry = new THREE.BufferGeometry().setFromPoints(
+      const geom = new THREE.BufferGeometry().setFromPoints(
         points3d.map((p) => new THREE.Vector3(p.x, p.y, p.z))
       );
-      const material = new THREE.LineBasicMaterial({
-        color: 0xff00ff,
-        linewidth: 10,
-      });
-      const line = new THREE.Line(geometry, material);
+      const mat = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 10 });
+      const line = new THREE.Line(geom, mat);
       lineRef.current = line;
       scene.add(line);
     }
   }, [points3d]);
 
-  // --- Playwright用のテストフック ---
-  useEffect(() => {
-    if (window.isPlaywrightTest) {
-      // @ts-expect-error - for testing
-      window.testState = { points3dCount: points3d.length };
-    }
-  }, [points3d]);
-
-  // --- WebGLレンダラの用意 ---
+  // --- WebGLレンダラ初期化 ---
   const ensureRenderer = useCallback(() => {
     if (rendererRef.current) return rendererRef.current;
-
     const canvas = canvasWebGLRef.current!;
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: true,
-      preserveDrawingBuffer: false,
-    });
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio || 1);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
 
-    // カメラのアスペクト更新
     const cam = cameraRef.current;
     cam.aspect = window.innerWidth / window.innerHeight;
     cam.updateProjectionMatrix();
 
-    // リサイズ対応
     const onResize = () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
       cam.aspect = window.innerWidth / window.innerHeight;
@@ -311,27 +342,19 @@ const MeasurePage: React.FC = () => {
     };
     window.addEventListener('resize', onResize);
 
-    // クリーンアップ（セッションend時にも呼ばれる）
-    const cleanup = () => {
-      window.removeEventListener('resize', onResize);
-    };
-    // @ts-expect-error - stash cleanup
-    (renderer as any).__cleanup = cleanup;
-
+    (renderer as any).__cleanup = () => window.removeEventListener('resize', onResize);
     rendererRef.current = renderer;
     return renderer;
   }, []);
 
-  // --- ARセッション開始（未定義だった関数をローカル実装） ---
+  // --- ARセッション開始 ---
   const startARSession = useCallback(async () => {
     try {
-      // 機能検出（Safari/macOS は通常 false）
       const supported = await isWebXRAvailable();
       setIsWebXrSupported(!!supported);
-
       if (!supported) {
         setIsArMode(false);
-        setError('このブラウザでは WebXR（AR）がサポートされていません。通常計測に切り替えます。');
+        setError('このブラウザではWebXR（AR）がサポートされていません。通常計測に切り替えます。');
         return;
       }
 
@@ -342,38 +365,29 @@ const MeasurePage: React.FC = () => {
         return;
       }
 
-      // レンダラの用意
       const renderer = ensureRenderer();
-
-      // セッション取得
       const sessionInit: XRSessionInit = {
         requiredFeatures: ['hit-test', 'local-floor'] as any,
         optionalFeatures: ['dom-overlay', 'unbounded'] as any,
-        // @ts-expect-error - domOverlay型は環境依存
+        // @ts-expect-error overlay root
         domOverlay: { root: document.body },
       };
 
       const session: XRSession = await xr.requestSession('immersive-ar', sessionInit);
-      // three.js にセッションを紐付け
       await (renderer as any).xr.setSession(session);
 
-      // ストア更新
       setXrSession(session);
       setIsArMode(true);
       setError(null);
       setArError(null);
 
-      // セッション終了時のクリーンアップ
-      const onEnd = () => {
+      session.addEventListener('end', () => {
         setXrSession(null);
         setIsArMode(false);
         const r = rendererRef.current;
-        if (r && (r as any).__cleanup) {
-          (r as any).__cleanup();
-        }
+        if (r && (r as any).__cleanup) (r as any).__cleanup();
         console.log('XR session ended');
-      };
-      session.addEventListener('end', onEnd);
+      });
     } catch (e: any) {
       console.error('startARSession failed:', e);
       setIsArMode(false);
@@ -382,14 +396,14 @@ const MeasurePage: React.FC = () => {
     }
   }, [ensureRenderer, setIsWebXrSupported, setIsArMode, setError, setXrSession, setArError]);
 
-  // --- isArMode が true になったら自動的に AR を開始 ---
+  // --- isArModeがtrueなら自動で開始 ---
   useEffect(() => {
     const { isArMode } = useMeasureStore.getState();
-    if (isArMode && !xrSession) {
-      // 以前は未定義関数を呼んでいた箇所を修正
-      startARSession();
-    }
+    if (isArMode && !xrSession) startARSession();
   }, [xrSession, startARSession]);
+
+  // WebXR サポートの簡易可否（UIの有効/無効表示用）
+  const isArSupported = typeof (navigator as any).xr !== 'undefined';
 
   return (
     <div
@@ -419,9 +433,23 @@ const MeasurePage: React.FC = () => {
           className="absolute top-0 left-0 w-full h-full z-0"
         />
       )}
+
       <MeasureUIComponent
         onStartARSession={startARSession}
         onToggleCameraFacingMode={toggleCameraFacingMode}
+        onCapturePhoto={onCapturePhoto}     // ← 追加
+        onPickPhoto={onPickPhoto}           // ← 追加
+        isArSupported={isArSupported}       // ← 追加
+      />
+
+      {/* 隠しファイル入力（写真選択用） */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={onPhotoSelected}
       />
     </div>
   );

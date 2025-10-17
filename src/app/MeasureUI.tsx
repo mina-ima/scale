@@ -4,15 +4,20 @@ import { useMeasureStore } from '../store/measureStore';
 import { formatMeasurement } from '../core/measure/format';
 
 interface MeasureUIProps {
-  onStartARSession: () => void; // 新しく追加するprops
+  onStartARSession: () => void;
   onToggleCameraFacingMode: () => void;
+  onCapturePhoto: () => void;   // 追加
+  onPickPhoto: () => void;      // 追加
+  isArSupported: boolean;       // 追加（navigator.xr の有無など）
 }
 
 const MeasureUIComponent: React.FC<MeasureUIProps> = ({
   onStartARSession,
   onToggleCameraFacingMode,
+  onCapturePhoto,
+  onPickPhoto,
+  isArSupported,
 }) => {
-  // propsを受け取る
   const {
     points3d,
     measurement,
@@ -23,94 +28,129 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
     isWebXrSupported,
     facingMode,
     clearPoints,
-    error, // Get global error state
+    error, // グローバルエラー
   } = useMeasureStore();
 
-  console.log('MeasureUIComponent: rendered', { error, isArMode, isWebXrSupported });
+  console.log('MeasureUIComponent: rendered', {
+    error,
+    isArMode,
+    isWebXrSupported,
+    isArSupported,
+  });
 
   const getInstructionText = () => {
     if (error) {
-      // Display global camera error
       return `エラー: ${error.title} - ${error.message}`;
     }
     if (!isArMode) {
-      // If AR is not active, and no global error, check WebXR support
-      if (!isWebXrSupported) {
-        return 'お使いの端末はAR非対応です。写真で計測に切り替えます。';
+      if (!isWebXrSupported || !isArSupported) {
+        return 'この端末/ブラウザはWebXR ARに非対応です。写真計測をご利用ください。';
       }
-      return null; // No specific instruction if AR is not active and no error
+      // 非ARモードで特に案内が不要なら null
+      return null;
     }
-    // AR mode instructions
+    // ARモード中の案内
     if (arError) return `エラー: ${arError}`;
-    if (!isPlaneDetected)
-      return 'AR: デバイスを動かして周囲の平面を検出してください。';
-    if (points3d.length === 0)
-      return 'AR: 平面が検出されました。計測の始点をタップしてください。';
+    if (!isPlaneDetected) return 'AR: デバイスを動かして周囲の平面を検出してください。';
+    if (points3d.length === 0) return 'AR: 平面が検出されました。計測の始点をタップしてください。';
     if (points3d.length === 1) return 'AR: 計測の終点をタップしてください。';
     return null;
   };
 
   const uiContent = (
     <div className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none">
-      <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded pointer-events-auto">
+      <div className="absolute top-4 left-4 bg-white/80 backdrop-blur p-3 rounded pointer-events-auto shadow">
         <h1 className="text-xl font-bold">計測モード</h1>
-        <p className="text-orange-500 text-sm mb-2">{getInstructionText()}</p>
+
+        <p className="text-orange-600 text-sm mb-2">{getInstructionText()}</p>
+
         {measurement?.valueMm && (
-          <p className="text-lg">
+          <p className="text-lg font-medium">
             {formatMeasurement(measurement.valueMm, unit)}
           </p>
         )}
-        {/* AR計測開始ボタンは、WebXRがサポートされており、ARモードがアクティブでなく、かつエラーがない場合にのみ表示 */}
-        {isWebXrSupported && !isArMode && !error && (
-          <button
-            className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onStartARSession) {
-                onStartARSession();
-              }
-            }}
-          >
-            AR計測を開始
-          </button>
-        )}
-        {/* カメラ切り替えボタンは、ARモードがアクティブでない、またはARがサポートされていない場合にのみ表示 */}
-        {!isArMode && !error && (
-          <button
-            className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleCameraFacingMode();
-            }}
-          >
-            カメラ切り替え (
-            {facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
-          </button>
-        )}
-        {/* リセットボタンは、エラーがない場合にのみ表示 */}
-        {!error && (
-          <button
-            className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-            onClick={(e) => {
-              e.stopPropagation();
-              clearPoints();
-            }}
-          >
-            リセット
-          </button>
-        )}
+
+        <div className="flex flex-wrap gap-2 mt-2">
+          {/* AR開始（対応していて、エラーなしで、今が非ARの時） */}
+          {!isArMode && !error && (
+            <button
+              className={`px-4 py-2 rounded text-white ${isWebXrSupported && isArSupported ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isWebXrSupported && isArSupported) onStartARSession();
+              }}
+              disabled={!isWebXrSupported || !isArSupported}
+              title={(!isWebXrSupported || !isArSupported) ? 'この端末ではWebXR ARを利用できません' : 'AR計測を開始'}
+            >
+              AR計測を開始{(!isWebXrSupported || !isArSupported) ? '（未対応）' : ''}
+            </button>
+          )}
+
+          {/* カメラ切替（非AR or AR非対応時） */}
+          {!isArMode && !error && (
+            <button
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCameraFacingMode();
+              }}
+              title="イン/アウトカメラを切り替え"
+            >
+              カメラ切替（{facingMode === 'user' ? 'イン' : 'アウト'}）
+            </button>
+          )}
+
+          {/* 写真計測（常に利用可・非AR時に前面に出す想定） */}
+          {!isArMode && !error && (
+            <>
+              <button
+                className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCapturePhoto();
+                }}
+                title="現在のカメラ映像を写真として取り込み"
+              >
+                写真を撮る
+              </button>
+
+              <button
+                className="px-4 py-2 bg-emerald-700 text-white rounded hover:bg-emerald-800"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPickPhoto();
+                }}
+                title="端末から写真を選択"
+              >
+                写真を選ぶ
+              </button>
+            </>
+          )}
+
+          {/* リセット */}
+          {!error && (
+            <button
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              onClick={(e) => {
+                e.stopPropagation();
+                clearPoints();
+              }}
+              title="ポイントをクリア"
+            >
+              リセット
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 
   const overlayRoot = document.getElementById('ar-overlay');
   if (!overlayRoot) {
-    console.error(
-      'DOM element with id "ar-overlay" not found. UI will not be rendered.'
-    );
+    console.error('DOM element with id "ar-overlay" not found. UI will not be rendered.');
     return null;
   }
-  return overlayRoot ? createPortal(uiContent, overlayRoot) : null;
+  return createPortal(uiContent, overlayRoot);
 };
 
 export default MeasureUIComponent;
