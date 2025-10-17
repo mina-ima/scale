@@ -1,9 +1,8 @@
 import { create } from 'zustand';
 import { Point } from '../core/fallback/utils';
-import { ScaleEstimation } from '../core/reference/ScaleEstimation'; // Import the correct ScaleEstimation
+import { ScaleEstimation } from '../core/reference/ScaleEstimation'; // mmPerPx を含む型を想定
 
-// We need to define Point3D and other types used in the state
-// For now, let's use a basic interface.
+// 3D点
 export interface Point3D {
   x: number;
   y: number;
@@ -11,8 +10,8 @@ export interface Point3D {
 }
 
 export interface MeasurementResult {
-  mode: MeasureMode; // Use MeasureMode for the measurement type
-  measurementMethod: 'ar' | 'fallback'; // New property to indicate AR or fallback
+  mode: MeasureMode;
+  measurementMethod: 'ar' | 'fallback';
   valueMm?: number;
   unit: 'cm' | 'm';
   dateISO: string;
@@ -24,6 +23,7 @@ export type MeasureMode =
   | 'growth-foot'
   | 'growth-hand'
   | 'growth-weight';
+
 export type ErrorState = {
   title: string;
   message: string;
@@ -39,10 +39,15 @@ export type ErrorState = {
 
 export interface MeasureState {
   measureMode: MeasureMode;
+  /** 画像上の 1px あたりの mm（校正結果）。null なら未校正 */
   scale: ScaleEstimation | null;
   error: ErrorState | null;
+
+  /** 2D計測点（写真/カメラ上） */
   points: Point[];
+  /** 3D計測点（AR） */
   points3d: Point3D[];
+
   measurement: MeasurementResult | null;
   unit: 'cm' | 'm';
   isArMode: boolean;
@@ -54,7 +59,13 @@ export interface MeasureState {
   facingMode: 'user' | 'environment';
 
   setMeasureMode: (mode: MeasureMode) => void;
+
+  /** ScaleEstimation そのものを設定（既存互換） */
   setScale: (scale: ScaleEstimation | null) => void;
+
+  /** mmPerPx を直接設定（nullならリセット） */
+  setScaleMmPerPx: (mmPerPx: number | null) => void;
+
   setError: (error: ErrorState | null) => void;
   addPoint: (point: Point) => void;
   addPoint3d: (point: Point3D) => void;
@@ -73,8 +84,10 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   measureMode: 'furniture',
   scale: null,
   error: null,
+
   points: [],
   points3d: [],
+
   measurement: null,
   unit: 'cm',
   isArMode: false,
@@ -86,15 +99,32 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   facingMode: 'environment',
 
   setMeasureMode: (mode) => set({ measureMode: mode }),
+
+  // 既存互換のスケール設定
   setScale: (scale) => set({ scale }),
+
+  // ★ 追加：mmPerPx を直接設定（手動校正で使用）
+  setScaleMmPerPx: (mmPerPx) =>
+    set(() => {
+      if (mmPerPx == null || Number.isNaN(mmPerPx) || !Number.isFinite(mmPerPx)) {
+        return { scale: null }; // リセット
+      }
+      // ScaleEstimation が { mmPerPx: number } である前提
+      const scaleObj = { mmPerPx } as ScaleEstimation;
+      return { scale: scaleObj };
+    }),
+
   setError: (error) => set({ error }),
+
   addPoint: (point) =>
     set((state) => {
+      // 3点目が来たらリセットして新しい1点目に（常に最新の2点で測定）
       if (state.points.length >= 2) {
         return { points: [point], points3d: [], measurement: null };
       }
       return { points: [...state.points, point] };
     }),
+
   addPoint3d: (point) =>
     set((state) => {
       if (state.points3d.length >= 2) {
@@ -102,19 +132,27 @@ export const useMeasureStore = create<MeasureState>((set) => ({
       }
       return { points3d: [...state.points3d, point] };
     }),
+
   clearPoints: () => set({ points: [], points3d: [], measurement: null }),
+
   setMeasurement: (measurement) => set({ measurement }),
+
   setUnit: (unit) => set({ unit }),
+
   setIsArMode: (isArMode) => set({ isArMode }),
+
   setXrSession: (session) => set({ xrSession: session }),
+
   setIsPlaneDetected: (isPlaneDetected) => set({ isPlaneDetected }),
+
   setArError: (error) => set({ arError: error }),
+
   setIsWebXrSupported: (supported) => set({ isWebXrSupported: supported }),
-  setCameraToggleRequested: (requested) =>
-    set({ cameraToggleRequested: requested }),
+
+  setCameraToggleRequested: (requested) => set({ cameraToggleRequested: requested }),
 }));
 
-// Expose useMeasureStore for Playwright tests
-if (typeof window !== 'undefined' && window.isPlaywrightTest) {
-  window.useMeasureStore = useMeasureStore;
+// Playwright テスト用に公開
+if (typeof window !== 'undefined' && (window as any).isPlaywrightTest) {
+  (window as any).useMeasureStore = useMeasureStore;
 }

@@ -28,7 +28,7 @@ const MeasurePage: React.FC = () => {
   const reticleRef = useRef<THREE.Mesh | null>(null);
   const [isTapping, setIsTapping] = useState(false);
 
-  // 撮影/選択した写真を保持するオフスクリーンキャンバス
+  // 撮影/選択した「表示用画像」を保持（displayCanvasと同じ内部サイズで合成済み）
   const photoCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const {
@@ -49,11 +49,33 @@ const MeasurePage: React.FC = () => {
     isArMode,
     setError,
     error: globalError,
+    setScaleMmPerPx, // ★変更: 手動校正（mm/px）を設定/リセット
   } = useMeasureStore();
 
   console.log('MeasurePage: rendered', { isArMode, globalError });
 
   const { stream, error: cameraError, toggleCameraFacingMode } = useCamera();
+
+  // --- ユーティリティ: cover描画（歪みなく全面フィット・中央トリミング） ---
+  const drawCover = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      src: CanvasImageSource,
+      srcW: number,
+      srcH: number,
+      destW: number,
+      destH: number
+    ) => {
+      // 目的：object-fit: cover と同じ見え方で描画
+      const scale = Math.max(destW / srcW, destH / srcH);
+      const drawW = srcW * scale;
+      const drawH = srcH * scale;
+      const dx = (destW - drawW) / 2;
+      const dy = (destH - drawH) / 2;
+      ctx.drawImage(src, dx, dy, drawW, drawH);
+    },
+    []
+  );
 
   // --- カメラストリームの管理 ---
   useEffect(() => {
@@ -71,12 +93,12 @@ const MeasurePage: React.FC = () => {
     console.log('MeasurePage: Current videoRef.current.srcObject:', video.srcObject);
 
     // 同一ストリームなら何もしない
-    if (stream && video.srcObject === stream) return;
+    if (stream && (video as any).srcObject === stream) return;
 
     if (stream) {
       console.log('MeasurePage: Setting videoRef.current.srcObject to new stream.');
       // 旧ストリームを停止
-      const oldStream = video.srcObject as MediaStream | null;
+      const oldStream = (video as any).srcObject as MediaStream | null;
       if (oldStream && oldStream !== stream) {
         oldStream.getTracks().forEach((t) => t.stop());
       }
@@ -106,7 +128,7 @@ const MeasurePage: React.FC = () => {
         };
         video.addEventListener('canplay', onCanPlay, { once: true });
       }
-    } else if (!stream && video.srcObject) {
+    } else if (!stream && (video as any).srcObject) {
       console.log('MeasurePage: Clearing videoRef.current.srcObject as stream is null.');
       video.pause();
       // @ts-expect-error - null 許容
@@ -114,28 +136,37 @@ const MeasurePage: React.FC = () => {
     }
   }, [stream, cameraError, setError, setIsArMode]);
 
-  // --- 写真計測: 撮影（背景Videoをオフスクリーン+表示キャンバスに転写）
+  // --- 写真計測: 撮影（coverで合成して保存＆表示） ---
   const onCapturePhoto = useCallback(() => {
     try {
       const video = videoRef.current;
       const displayCanvas = canvas2dRef.current;
       if (!video || !displayCanvas) return;
 
-      // オフスクリーンに保存（常に貼り戻せるようにする）
+      const dpr = window.devicePixelRatio || 1;
+      const rect = displayCanvas.getBoundingClientRect();
+      // 表示キャンバスの内部サイズを「表示領域×dpr」に
+      const destW = Math.round(rect.width * dpr);
+      const destH = Math.round(rect.height * dpr);
+
+      // オフスクリーンを display と同サイズで作成し、cover描画
       const off = document.createElement('canvas');
-      const w = video.videoWidth || window.innerWidth;
-      const h = video.videoHeight || window.innerHeight;
-      off.width = w;
-      off.height = h;
+      off.width = destW;
+      off.height = destH;
       const offCtx = off.getContext('2d');
-      offCtx?.drawImage(video, 0, 0, w, h);
+      if (!offCtx) return;
+      drawCover(offCtx, video, video.videoWidth || 1, video.videoHeight || 1, destW, destH);
       photoCanvasRef.current = off;
 
-      // 画面にも即時反映
-      displayCanvas.width = w;
-      displayCanvas.height = h;
+      // 表示キャンバスも同サイズ（内部ピクセル）にして転写
+      displayCanvas.width = destW;
+      displayCanvas.height = destH;
       const ctx = displayCanvas.getContext('2d');
       ctx?.drawImage(off, 0, 0);
+
+      // ★変更: 新しい写真になったらスケールと点をリセット
+      clearPoints();
+      setScaleMmPerPx(null);
 
       setIsArMode(false);
       setError(null);
@@ -143,9 +174,9 @@ const MeasurePage: React.FC = () => {
       console.error('capturePhoto failed', e);
       setError('写真の取得に失敗しました');
     }
-  }, [setIsArMode, setError]);
+  }, [setIsArMode, setError, drawCover, clearPoints, setScaleMmPerPx]);
 
-  // --- 写真計測: 端末から選択（オフスクリーンに保存→表示に反映）
+  // --- 写真計測: 端末から選択（coverで合成して保存＆表示） ---
   const onPickPhoto = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -157,38 +188,50 @@ const MeasurePage: React.FC = () => {
     img.onload = () => {
       const displayCanvas = canvas2dRef.current;
       if (!displayCanvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = displayCanvas.getBoundingClientRect();
+      const destW = Math.round(rect.width * dpr);
+      const destH = Math.round(rect.height * dpr);
 
-      // オフスクリーンに保存
+      // オフスクリーンに cover で作って保存
       const off = document.createElement('canvas');
-      off.width = img.width;
-      off.height = img.height;
+      off.width = destW;
+      off.height = destH;
       const offCtx = off.getContext('2d');
-      offCtx?.drawImage(img, 0, 0);
+      if (!offCtx) return;
+      drawCover(offCtx, img, img.naturalWidth || img.width, img.naturalHeight || img.height, destW, destH);
       photoCanvasRef.current = off;
 
-      // 画面にも即時反映
-      displayCanvas.width = img.width;
-      displayCanvas.height = img.height;
+      // 表示を更新
+      displayCanvas.width = destW;
+      displayCanvas.height = destH;
       const ctx = displayCanvas.getContext('2d');
       ctx?.drawImage(off, 0, 0);
+
+      // ★変更: 新しい写真になったらスケールと点をリセット
+      clearPoints();
+      setScaleMmPerPx(null);
 
       setIsArMode(false);
       setError(null);
     };
     img.onerror = () => setError('画像の読み込みに失敗しました');
     img.src = URL.createObjectURL(file);
-  }, [setIsArMode, setError]);
+  }, [setIsArMode, setError, drawCover, clearPoints, setScaleMmPerPx]);
 
-  // --- クリック処理 ---
+  // --- クリック処理（CSS座標→キャンバス座標へ変換） ---
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (xrSession) {
         setIsTapping(true);
       } else {
-        if (canvas2dRef.current) {
-          const rect = canvas2dRef.current.getBoundingClientRect();
-          const x = event.clientX - rect.left;
-          const y = event.clientY - rect.top;
+        const canvas = canvas2dRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const scaleX = canvas.width / rect.width;
+          const scaleY = canvas.height / rect.height;
+          const x = (event.clientX - rect.left) * scaleX;
+          const y = (event.clientY - rect.top) * scaleY;
           addPoint({ x, y });
         }
       }
@@ -221,8 +264,9 @@ const MeasurePage: React.FC = () => {
 
   // --- 2D距離計算（フォールバック: mm換算はスケールがある場合のみ） ---
   useEffect(() => {
-    if (points.length === 2 && scale?.mmPerPx) {
-      const distance = calculate2dDistance(points[0], points[1], scale.mmPerPx);
+    if (points.length === 2 && (scale as any)?.mmPerPx) {
+      const mmPerPx = (scale as any).mmPerPx as number;
+      const distance = calculate2dDistance(points[0], points[1], mmPerPx);
       setMeasurement({
         mode: 'furniture',
         measurementMethod: 'fallback',
@@ -244,7 +288,7 @@ const MeasurePage: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // 背景写真がある場合はサイズも写真に合わせる
+    // 背景は cover 合成済みなので、そのまま等倍コピー
     if (bg) {
       if (canvas.width !== bg.width || canvas.height !== bg.height) {
         canvas.width = bg.width;
@@ -256,17 +300,14 @@ const MeasurePage: React.FC = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
-    // ★変更: 線の描画は「計測(mm)があるかどうか」に依存しない
     if (points.length === 2) {
       drawMeasurementLine(ctx, points[0], points[1]);
 
-      // ラベル位置
       const labelPos = {
         x: (points[0].x + points[1].x) / 2,
         y: (points[0].y + points[1].y) / 2,
       };
 
-      // ★変更: mm計測がなければ px 距離を表示（未校正）
       const { measurement } = useMeasureStore.getState();
       if (measurement?.valueMm && measurement.unit) {
         const formatted = formatMeasurement(measurement.valueMm, measurement.unit);
