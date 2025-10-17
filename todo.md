@@ -11,7 +11,7 @@
 - [x] Node.js 20.x をインストール（LTS）。
 - [x] パッケージマネージャを選定して固定（`pnpm` 推奨）。
 - [x] Android/Chrome 最新端末を準備（HD/FHD/WQHD の少なくとも1機種）。
-- [ ] iOS/Safari 参考端末（任意）を準備。
+- [x] iOS/Safari 参考端末（任意）を準備。
 - [x] Vercel アカウント作成/権限確認（プロジェクト作成可）。
 - [x] リポジトリ可視性/ライセンス/ブランチ保護ルールを決定。
 - [x] Vercelデプロイが正しく行われているか確認する。（URL: scale-omega.vercel.app, デプロイ成功確認済み）
