@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import HomePage from './app/HomePage';
 import { useMeasureStore } from './store/measureStore';
+import { ErrorBoundary } from './app/ErrorBoundary'; // ← 追加
 
 const MeasurePage = lazy(() => import('./app/MeasurePage'));
 const GrowthRecordPage = lazy(() => import('./app/GrowthRecordPage'));
@@ -17,13 +18,15 @@ function App() {
   }, [setScale]);
 
   return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/measure" element={<MeasurePage />} />
-        <Route path="/growth-record" element={<GrowthRecordPage />} />
-      </Routes>
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<div>Loading...</div>}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/measure" element={<MeasurePage />} />
+          <Route path="/growth-record" element={<GrowthRecordPage />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 
