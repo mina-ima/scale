@@ -1,16 +1,10 @@
 /* eslint-disable react/prop-types */
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useMeasureStore } from '../store/measureStore';
+import { useMeasureStore, type Homography } from '../store/measureStore';
 import { formatMeasurement } from '../core/measure/format';
-
-// 追加：ホモグラフィ計算
-import {
-  computeHomography,
-  rectMmCorners,
-  sortCornersClockwise,
-  type Vec2,
-} from '../core/geometry/homography';
+// ★ 追加: ホモグラフィ計算関数（画像4点→実寸矩形4点）
+import { computeHomography } from '../core/geometry/homography';
 
 interface MeasureUIProps {
   onStartARSession: () => void;
@@ -20,21 +14,43 @@ interface MeasureUIProps {
   isArSupported: boolean;
 }
 
-type ReferenceKey =
-  | 'credit-card'
-  | 'a4-portrait'
-  | 'a4-landscape'
-  | 'note-1000'
-  | 'custom';
+type ReferenceKeyRect =
+  | 'creditCard'      // 85.60 x 53.98
+  | 'a4Portrait'      // 210 x 297
+  | 'a4Landscape'     // 297 x 210
+  | 'yen1000'         // 150 x 76
+  | 'yen10000'        // 160 x 76
+  | 'customRect';
 
-// ←★ キーにハイフンがあるので「必ず文字列キー」で書く
-const PRESETS: Record<ReferenceKey, { label: string; w: number; h: number } | null> = {
-  'credit-card':  { label: 'クレジットカード（85.60×53.98mm）', w: 85.60, h: 53.98 },
-  'a4-portrait':  { label: 'A4（縦：210×297mm）',                 w: 210,   h: 297 },
-  'a4-landscape': { label: 'A4（横：297×210mm）',                 w: 297,   h: 210 },
-  'note-1000':    { label: '千円札（150×76mm）',                   w: 150,   h: 76  },
-  'custom':       null,
+const RECT_PRESETS: Record<ReferenceKeyRect, { label: string; w: number; h: number } | null> = {
+  creditCard:  { label: 'カード（85.60×53.98mm）', w: 85.60, h: 53.98 },
+  a4Portrait:  { label: 'A4 縦（210×297mm）',      w: 210,   h: 297   },
+  a4Landscape: { label: 'A4 横（297×210mm）',      w: 297,   h: 210   },
+  yen1000:     { label: '千円札（150×76mm）',       w: 150,   h: 76    },
+  yen10000:    { label: '一万円札（160×76mm）',     w: 160,   h: 76    },
+  customRect:  null,
 };
+
+type ReferenceKeyLength =
+  | 'creditCardWidth'  // 85.60
+  | 'a4Short'          // 210
+  | 'a4Long'           // 297
+  | 'coin100'          // 22.6
+  | 'coin500'          // 26.5
+  | 'yen1000Width'     // 150
+  | 'yen10000Width'    // 160
+  | 'customLength';
+
+const LENGTH_PRESETS: { key: ReferenceKeyLength; label: string; mm: number | null }[] = [
+  { key: 'creditCardWidth', label: 'カード横幅（85.60mm）', mm: 85.6 },
+  { key: 'a4Short',         label: 'A4 短辺（210mm）',     mm: 210 },
+  { key: 'a4Long',          label: 'A4 長辺（297mm）',     mm: 297 },
+  { key: 'coin100',         label: '100円硬貨 直径（22.6mm）', mm: 22.6 },
+  { key: 'coin500',         label: '500円硬貨 直径（26.5mm）', mm: 26.5 },
+  { key: 'yen1000Width',    label: '千円札の横幅（150mm）', mm: 150 },
+  { key: 'yen10000Width',   label: '一万円札の横幅（160mm）', mm: 160 },
+  { key: 'customLength',    label: '任意の長さ（mmを入力）', mm: null },
+];
 
 const MeasureUIComponent: React.FC<MeasureUIProps> = ({
   onStartARSession,
@@ -58,17 +74,24 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
     scale,
     setScaleMmPerPx,
 
-    // 追加：四隅・H
-    calibCorners,
-    setHomography,
-    clearCalibCorners,
+    // ★ 追加: 平面補正
     homography,
+    setHomography,
+
+    // ★ 追加: クリックモード
+    selectionMode,
+    setSelectionMode,
   } = useMeasureStore();
 
-  const [refKey, setRefKey] = useState<ReferenceKey>('credit-card');
-  const [customW, setCustomW] = useState<string>('200'); // mm
-  const [customH, setCustomH] = useState<string>('200'); // mm
+  // 等倍率（2点）用
+  const [lenKey, setLenKey] = useState<ReferenceKeyLength>('creditCardWidth');
+  const [customMm, setCustomMm] = useState<string>('');
   const [calibMsg, setCalibMsg] = useState<string | null>(null);
+
+  // 平面補正（4点）用
+  const [rectKey, setRectKey] = useState<ReferenceKeyRect>('creditCard');
+  const [customRectW, setCustomRectW] = useState<string>('');
+  const [customRectH, setCustomRectH] = useState<string>('');
 
   const currentMmPerPx = (scale as any)?.mmPerPx as number | undefined;
 
@@ -80,12 +103,14 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
   }, [points]);
 
   const getInstructionText = () => {
-    if (error) {
-      return `エラー: ${error.title} - ${error.message}`;
-    }
+    if (error) return `エラー: ${error.title} - ${error.message}`;
     if (!isArMode) {
       if (!isWebXrSupported || !isArSupported) {
         return 'この端末/ブラウザはWebXR ARに非対応です。写真計測をご利用ください。';
+      }
+      // 写真計測時のガイダンス（必要に応じて）
+      if (selectionMode === 'calibrate-plane') {
+        return '平面補正: 写真上で「基準矩形の四隅」を時計回りで4点タップしてください。';
       }
       return null;
     }
@@ -96,56 +121,91 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
     return null;
   };
 
-  //（現状ここでは mm/px の直接適用UIは使っていないので関数のみ残置）
-  const resetLinearCalibration = () => {
-    setScaleMmPerPx(null);
-    setCalibMsg('mm/px 校正をリセットしました。');
+  // ====== 等倍率（2点）校正 ======
+  const applyLengthCalibration = () => {
+    setCalibMsg(null);
+    if (pxDistance == null || pxDistance <= 0) {
+      setCalibMsg('写真上で基準物の両端を2点タップしてください。');
+      return;
+    }
+    const preset = LENGTH_PRESETS.find(r => r.key === lenKey);
+    const mm =
+      preset?.mm != null ? preset.mm : Number.isFinite(Number(customMm)) ? Number(customMm) : NaN;
+    if (!Number.isFinite(mm) || (mm as number) <= 0) {
+      setCalibMsg('有効な基準長（mm）を入力してください。');
+      return;
+    }
+    const mmPerPx = (mm as number) / pxDistance;
+    if (!Number.isFinite(mmPerPx) || mmPerPx <= 0) {
+      setCalibMsg('校正に失敗しました。別の基準や写真でお試しください。');
+      return;
+    }
+    // 等倍率校正を適用するときは平面補正はクリア
+    setHomography(null);
+    setScaleMmPerPx(mmPerPx);
+    setCalibMsg(`校正を適用（mm/px = ${mmPerPx.toFixed(4)}）。以降の測定はmm表示になります。`);
   };
 
-  // --- 四隅→平面補正の適用
-  const applyHomographyCalibration = () => {
+  const resetLengthCalibration = () => {
+    setScaleMmPerPx(null);
+    setCalibMsg('校正（mm/px）をリセットしました。');
+  };
+
+  // ====== 平面補正（4点） ======
+  const startPlaneCalibration = () => {
     setCalibMsg(null);
-    if (calibCorners.length !== 4) {
-      setCalibMsg('写真上で対象矩形の四隅を 1→2→3→4 の順にタップしてください。');
+    // クリックモードを「四隅キャプチャ」に
+    setSelectionMode('calibrate-plane');
+    // 既存の2点/計測はクリアしておくと迷わない
+    clearPoints();
+  };
+
+  const cancelPlaneCalibration = () => {
+    setSelectionMode('measure');
+    clearPoints();
+  };
+
+  const applyPlaneCalibration = () => {
+    setCalibMsg(null);
+    if (points.length !== 4) {
+      setCalibMsg('写真上で四隅を「時計回り」で4点タップしてください。');
       return;
     }
-    let w: number, h: number;
-    const preset = PRESETS[refKey];
-    if (refKey === 'custom') {
-      w = Number(customW);
-      h = Number(customH);
-      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-        setCalibMsg('有効な幅・高さ（mm）を入力してください。');
-        return;
-      }
-    } else if (preset) {
-      w = preset.w;
-      h = preset.h;
-    } else {
-      setCalibMsg('有効なプリセットを選択してください。');
+    const preset = RECT_PRESETS[rectKey];
+    const w = preset ? preset.w : Number(customRectW);
+    const h = preset ? preset.h : Number(customRectH);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+      setCalibMsg('有効な矩形サイズ（mm）を入力してください。');
       return;
     }
 
-    // 入力四隅を安定順序に
-    const srcPx: Vec2[] = sortCornersClockwise(calibCorners as Vec2[]);
-    const dstMm: Vec2[] = rectMmCorners(w, h);
+    // 画像座標（px）: p0..p3（時計回り）
+    const imgPts = points.map(p => ({ x: p.x, y: p.y }));
+
+    // 実平面上の矩形（mm）を (0,0)->(w,0)->(w,h)->(0,h) に固定
+    const worldPts = [
+      { x: 0, y: 0 },
+      { x: w, y: 0 },
+      { x: w, y: h },
+      { x: 0, y: h },
+    ];
 
     try {
-      const H = computeHomography(srcPx, dstMm);
+      const H = computeHomography(imgPts, worldPts) as Homography;
+      if (!H || H.length !== 9) {
+        setCalibMsg('ホモグラフィ計算に失敗しました。点の順序/位置を見直してください。');
+        return;
+      }
+      // 平面補正を有効化し、等倍率校正はクリア
       setHomography(H);
-      setCalibMsg(`平面補正を適用しました（${w}×${h} mm）。以降は遠近補正された mm で表示されます。`);
-      // 等倍率校正は競合するので併用しない（クリア）
       setScaleMmPerPx(null);
-    } catch (e: any) {
-      console.error(e);
-      setCalibMsg('平面補正に失敗しました。四隅の順序や位置を見直してください。');
+      setSelectionMode('measure');
+      clearPoints();
+      setCalibMsg('平面補正を適用しました。以降の2点計測は平面mmで算出されます。');
+    } catch (e) {
+      console.error('computeHomography failed', e);
+      setCalibMsg('平面補正に失敗しました。四隅順序（時計回り）と矩形サイズを確認してください。');
     }
-  };
-
-  const resetHomographyCalibration = () => {
-    setHomography(null);
-    clearCalibCorners();
-    setCalibMsg('平面補正をリセットしました。再度、四隅をタップしてください。');
   };
 
   const uiContent = (
@@ -163,6 +223,7 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
 
         {/* 操作用ボタン群 */}
         <div className="flex flex-wrap gap-2 mt-2">
+          {/* AR開始（対応時） */}
           {!isArMode && !error && (
             <button
               className={`px-3 py-2 rounded text-white ${isWebXrSupported && isArSupported ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
@@ -177,6 +238,7 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
             </button>
           )}
 
+          {/* カメラ切替 */}
           {!isArMode && !error && (
             <button
               className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -190,6 +252,7 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
             </button>
           )}
 
+          {/* 写真計測 */}
           {!isArMode && !error && (
             <>
               <button
@@ -216,6 +279,7 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
             </>
           )}
 
+          {/* リセット（ポイント） */}
           {!error && (
             <button
               className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
@@ -230,30 +294,113 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
           )}
         </div>
 
-        {/* ───────── 平面補正（四隅→mm平面） ───────── */}
-        <div className="mt-3 p-3 rounded bg-white/85 border border-gray-300">
-          <div className="font-semibold mb-1">遠近補正（四隅→平面 mm）</div>
-          <div className="text-sm text-gray-700 mb-2">
-            写真上で対象矩形の四隅を <b>1 → 2 → 3 → 4</b> の順にタップしてください。
-            その後、実寸サイズを選んで「適用」を押すと、遠近補正された mm で測定できます。
-          </div>
-
-          <div className="flex flex-wrap gap-2 items-center">
+        {/* ===== 等倍率（2点）校正パネル ===== */}
+        <div className="mt-3 p-3 rounded bg-white/80 border border-gray-300">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold">基準物で校正（2点）</span>
             <select
               className="border rounded px-2 py-1"
-              value={refKey}
-              onChange={(e) => setRefKey(e.target.value as ReferenceKey)}
+              value={lenKey}
+              onChange={(e) => setLenKey(e.target.value as ReferenceKeyLength)}
               onClick={(e) => e.stopPropagation()}
-              title="対象矩形の実寸プリセット"
+              title="写真に写っている基準物を選択"
             >
-              {Object.entries(PRESETS).map(([k, v]) => (
+              {LENGTH_PRESETS.map((r) => (
+                <option key={r.key} value={r.key}>{r.label}</option>
+              ))}
+            </select>
+
+            {lenKey === 'customLength' && (
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="基準の長さ(mm)"
+                value={customMm}
+                onChange={(e) => setCustomMm(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="border rounded px-2 py-1 w-36"
+              />
+            )}
+
+            <button
+              className={`px-3 py-2 rounded text-white ${points.length === 2 && selectionMode !== 'calibrate-plane' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                applyLengthCalibration();
+              }}
+              disabled={!(points.length === 2 && selectionMode !== 'calibrate-plane')}
+              title="写真上で基準物の両端を2点タップしてから適用"
+            >
+              適用（2点）
+            </button>
+
+            <button
+              className="px-3 py-2 rounded border border-gray-400 hover:bg-gray-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                resetLengthCalibration();
+              }}
+              title="等倍率校正を解除"
+            >
+              校正リセット
+            </button>
+          </div>
+
+          <div className="mt-2 text-sm text-gray-700">
+            <div>現在の点数: {points.length}</div>
+            <div>
+              {pxDistance != null
+                ? <>選択中の区間: {Math.round(pxDistance)} px</>
+                : <>2点をタップして区間を作成してください</>}
+            </div>
+            <div>
+              {currentMmPerPx
+                ? <>校正値: <b>{currentMmPerPx.toFixed(4)}</b> mm/px（2点距離はmm表示）</>
+                : <>未校正（2点法）: px表示</>}
+            </div>
+          </div>
+        </div>
+
+        {/* ===== 平面補正（4点）パネル ===== */}
+        <div className="mt-3 p-3 rounded bg-white/80 border border-gray-300">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold">平面補正（4点・時計回り）</span>
+
+            {selectionMode !== 'calibrate-plane' ? (
+              <button
+                className="px-3 py-2 rounded text-white bg-teal-600 hover:bg-teal-700"
+                onClick={(e) => { e.stopPropagation(); startPlaneCalibration(); }}
+                title="平面補正モードに入り、四隅を4点タップします"
+              >
+                四角 → 平面補正モード開始
+              </button>
+            ) : (
+              <button
+                className="px-3 py-2 rounded bg-gray-100 border hover:bg-gray-200"
+                onClick={(e) => { e.stopPropagation(); cancelPlaneCalibration(); }}
+                title="平面補正モードを終了（点はクリアされます）"
+              >
+                平面補正モード終了
+              </button>
+            )}
+
+            <select
+              className="border rounded px-2 py-1"
+              value={rectKey}
+              onChange={(e) => setRectKey(e.target.value as ReferenceKeyRect)}
+              onClick={(e) => e.stopPropagation()}
+              title="写真に写っている矩形基準を選択"
+            >
+              {Object.entries(RECT_PRESETS).map(([k, v]) => (
                 <option key={k} value={k}>
-                  {v ? v.label : '任意の矩形（幅・高さを入力）'}
+                  {v ? v.label : '任意の矩形（mm指定）'}
                 </option>
               ))}
             </select>
 
-            {refKey === 'custom' && (
+            {rectKey === 'customRect' && (
               <>
                 <input
                   type="number"
@@ -261,8 +408,8 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
                   step="0.01"
                   min="0"
                   placeholder="幅(mm)"
-                  value={customW}
-                  onChange={(e) => setCustomW(e.target.value)}
+                  value={customRectW}
+                  onChange={(e) => setCustomRectW(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
                   className="border rounded px-2 py-1 w-28"
                 />
@@ -272,8 +419,8 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
                   step="0.01"
                   min="0"
                   placeholder="高さ(mm)"
-                  value={customH}
-                  onChange={(e) => setCustomH(e.target.value)}
+                  value={customRectH}
+                  onChange={(e) => setCustomRectH(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
                   className="border rounded px-2 py-1 w-28"
                 />
@@ -281,51 +428,29 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
             )}
 
             <button
-              className={`px-3 py-2 rounded text-white ${calibCorners.length === 4 ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
-              onClick={(e) => { e.stopPropagation(); applyHomographyCalibration(); }}
-              disabled={calibCorners.length !== 4}
-              title="四隅が4点そろうと適用可能"
+              className={`px-3 py-2 rounded text-white ${
+                selectionMode === 'calibrate-plane' && points.length === 4
+                  ? 'bg-teal-700 hover:bg-teal-800'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+              onClick={(e) => { e.stopPropagation(); applyPlaneCalibration(); }}
+              disabled={!(selectionMode === 'calibrate-plane' && points.length === 4)}
+              title="四隅を4点タップ後に適用"
             >
-              適用（四隅→平面補正）
+              適用（平面補正）
             </button>
 
-            <button
-              className="px-3 py-2 rounded border border-gray-400 hover:bg-gray-100"
-              onClick={(e) => { e.stopPropagation(); resetHomographyCalibration(); }}
-              title="平面補正を解除し、四隅もクリア"
-            >
-              平面補正リセット
-            </button>
+            {homography && (
+              <span className="text-xs text-teal-700 ml-2">平面補正: ON</span>
+            )}
+          </div>
 
-            <div className="text-sm text-gray-700 ml-1">
-              四隅: {calibCorners.length}/4
-              {homography ? '（適用中）' : ''}
+          <div className="mt-2 text-sm text-gray-700">
+            <div>現在の点数: {points.length}（平面補正モード中は最大4点）</div>
+            <div className="text-gray-600">
+              点は時計回りで: 左上 → 右上 → 右下 → 左下 の順に選ぶと安定します。
             </div>
-          </div>
-
-          {calibMsg && <div className="mt-2 text-amber-700 text-sm">{calibMsg}</div>}
-        </div>
-
-        {/* ───────── 等倍率（mm/px）情報表示 ───────── */}
-        <div className="mt-3 p-2 rounded bg-white/80 border border-gray-300 text-sm text-gray-700">
-          <div>
-            {pxDistance != null
-              ? <>選択中の区間: {Math.round(pxDistance)} px</>
-              : <>写真上で2点タップすると区間が表示されます</>}
-          </div>
-          <div>
-            {(scale as any)?.mmPerPx
-              ? <>mm/px 校正: <b>{(scale as any).mmPerPx.toFixed(4)}</b> mm/px</>
-              : <>mm/px 校正: なし（px表示 or 平面補正を使用）</>}
-          </div>
-          <div className="mt-1">
-            <button
-              className="px-3 py-1 rounded border border-gray-400 hover:bg-gray-100"
-              onClick={(e) => { e.stopPropagation(); resetLinearCalibration(); }}
-              title="mm/px を解除（平面補正を使う場合は解除推奨）"
-            >
-              mm/px 校正リセット
-            </button>
+            {calibMsg && <div className="mt-1 text-amber-700">{calibMsg}</div>}
           </div>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { Point } from '../core/fallback/utils';
 import { ScaleEstimation } from '../core/reference/ScaleEstimation';
-import type { Homography } from '../core/geometry/homography';
 
 // 3D点
 export interface Point3D {
@@ -38,16 +37,17 @@ export type ErrorState = {
   name: string;
 } | null;
 
+// ★ 追加: ホモグラフィ（3x3）
+export type Homography = [number, number, number, number, number, number, number, number, number];
+
+// ★ 追加: クリック挙動を切り替えるモード
+export type SelectionMode = 'measure' | 'calibrate-plane' | 'calibrate-scale';
+
 export interface MeasureState {
   measureMode: MeasureMode;
-
-  /** 画像上の 1px あたりの mm（一次校正：等倍率） */
+  /** 画像上の 1px あたりの mm（校正結果）。null なら未校正 */
   scale: ScaleEstimation | null;
-
-  /** 平面校正：四隅（画像px座標、最大4点） */
-  calibCorners: Point[];
-
-  /** 平面校正：画像px → 平面mm のホモグラフィ（遠近補正） */
+  /** 平面補正ホモグラフィ（画像px → 平面mm） */
   homography: Homography | null;
 
   error: ErrorState | null;
@@ -67,21 +67,21 @@ export interface MeasureState {
   cameraToggleRequested: boolean;
   facingMode: 'user' | 'environment';
 
+  /** クリック動作モード（2点測定 / 4点平面校正 など） */
+  selectionMode: SelectionMode;
+
   setMeasureMode: (mode: MeasureMode) => void;
 
   /** ScaleEstimation そのものを設定（既存互換） */
   setScale: (scale: ScaleEstimation | null) => void;
-
   /** mmPerPx を直接設定（nullならリセット） */
   setScaleMmPerPx: (mmPerPx: number | null) => void;
 
-  /** 四隅の追加（最大4点）。5点目以降はリセットして新規開始。 */
-  addCalibCorner: (p: Point) => void;
-  /** 四隅のクリア */
-  clearCalibCorners: () => void;
-
-  /** ホモグラフィの設定/解除 */
+  /** ★ 追加: ホモグラフィ設定/解除 */
   setHomography: (H: Homography | null) => void;
+
+  /** ★ 追加: クリック動作モード切替 */
+  setSelectionMode: (mode: SelectionMode) => void;
 
   setError: (error: ErrorState | null) => void;
   addPoint: (point: Point) => void;
@@ -100,8 +100,6 @@ export interface MeasureState {
 export const useMeasureStore = create<MeasureState>((set) => ({
   measureMode: 'furniture',
   scale: null,
-
-  calibCorners: [],
   homography: null,
 
   error: null,
@@ -119,6 +117,8 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   cameraToggleRequested: false,
   facingMode: 'environment',
 
+  selectionMode: 'measure',
+
   setMeasureMode: (mode) => set({ measureMode: mode }),
 
   // 既存互換のスケール設定
@@ -128,28 +128,30 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   setScaleMmPerPx: (mmPerPx) =>
     set(() => {
       if (mmPerPx == null || Number.isNaN(mmPerPx) || !Number.isFinite(mmPerPx)) {
-        return { scale: null };
+        return { scale: null }; // リセット
       }
       const scaleObj = { mmPerPx } as ScaleEstimation;
       return { scale: scaleObj };
     }),
 
-  // 四隅の管理（最大4。5つ目が来たらやり直し）
-  addCalibCorner: (p) =>
-    set((state) => {
-      if (state.calibCorners.length >= 4) {
-        return { calibCorners: [p] };
-      }
-      return { calibCorners: [...state.calibCorners, p] };
-    }),
-  clearCalibCorners: () => set({ calibCorners: [] }),
-
+  // ★ 追加: ホモグラフィ設定/解除
   setHomography: (H) => set({ homography: H }),
+
+  // ★ 追加: クリック動作モード
+  setSelectionMode: (mode) => set({ selectionMode: mode }),
 
   setError: (error) => set({ error }),
 
+  // ★ 重要: モードに応じて 2点 or 4点 を保持
   addPoint: (point) =>
     set((state) => {
+      if (state.selectionMode === 'calibrate-plane') {
+        // 平面校正中は最大 4 点まで保持（5点目以降は最新4点にする）
+        const next = [...state.points, point];
+        const clipped = next.length > 4 ? next.slice(next.length - 4) : next;
+        return { points: clipped };
+      }
+      // それ以外（通常測定/等倍率校正）は最大 2 点
       if (state.points.length >= 2) {
         return { points: [point], points3d: [], measurement: null };
       }
