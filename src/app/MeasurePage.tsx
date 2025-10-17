@@ -18,7 +18,7 @@ const MeasurePage: React.FC = () => {
   const canvas2dRef = useRef<HTMLCanvasElement>(null);
   const canvasWebGLRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null); // ← 写真選択用
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef(new THREE.Scene());
   const cameraRef = useRef(
@@ -27,6 +27,9 @@ const MeasurePage: React.FC = () => {
   const lineRef = useRef<THREE.Line | null>(null);
   const reticleRef = useRef<THREE.Mesh | null>(null);
   const [isTapping, setIsTapping] = useState(false);
+
+  // 撮影/選択した写真を保持するオフスクリーンキャンバス
+  const photoCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const {
     points,
@@ -111,20 +114,29 @@ const MeasurePage: React.FC = () => {
     }
   }, [stream, cameraError, setError, setIsArMode]);
 
-  // --- 写真計測: 撮影（背景Videoをキャンバスに転写）
+  // --- 写真計測: 撮影（背景Videoをオフスクリーン+表示キャンバスに転写）
   const onCapturePhoto = useCallback(() => {
     try {
       const video = videoRef.current;
-      const canvas = canvas2dRef.current;
-      if (!video || !canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      const displayCanvas = canvas2dRef.current;
+      if (!video || !displayCanvas) return;
+
+      // オフスクリーンに保存（常に貼り戻せるようにする）
+      const off = document.createElement('canvas');
       const w = video.videoWidth || window.innerWidth;
       const h = video.videoHeight || window.innerHeight;
-      canvas.width = w;
-      canvas.height = h;
-      ctx.drawImage(video, 0, 0, w, h);
-      // 以降は2D計測フロー（点打ち）
+      off.width = w;
+      off.height = h;
+      const offCtx = off.getContext('2d');
+      offCtx?.drawImage(video, 0, 0, w, h);
+      photoCanvasRef.current = off;
+
+      // 画面にも即時反映
+      displayCanvas.width = w;
+      displayCanvas.height = h;
+      const ctx = displayCanvas.getContext('2d');
+      ctx?.drawImage(off, 0, 0);
+
       setIsArMode(false);
       setError(null);
     } catch (e) {
@@ -133,7 +145,7 @@ const MeasurePage: React.FC = () => {
     }
   }, [setIsArMode, setError]);
 
-  // --- 写真計測: 端末から選択
+  // --- 写真計測: 端末から選択（オフスクリーンに保存→表示に反映）
   const onPickPhoto = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -143,13 +155,23 @@ const MeasurePage: React.FC = () => {
     if (!file) return;
     const img = new Image();
     img.onload = () => {
-      const canvas = canvas2dRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
+      const displayCanvas = canvas2dRef.current;
+      if (!displayCanvas) return;
+
+      // オフスクリーンに保存
+      const off = document.createElement('canvas');
+      off.width = img.width;
+      off.height = img.height;
+      const offCtx = off.getContext('2d');
+      offCtx?.drawImage(img, 0, 0);
+      photoCanvasRef.current = off;
+
+      // 画面にも即時反映
+      displayCanvas.width = img.width;
+      displayCanvas.height = img.height;
+      const ctx = displayCanvas.getContext('2d');
+      ctx?.drawImage(off, 0, 0);
+
       setIsArMode(false);
       setError(null);
     };
@@ -197,7 +219,7 @@ const MeasurePage: React.FC = () => {
     }
   }, [points3d, setMeasurement, unit, clearPoints, setArError]);
 
-  // --- 2D距離計算（フォールバック） ---
+  // --- 2D距離計算（フォールバック: mm換算はスケールがある場合のみ） ---
   useEffect(() => {
     if (points.length === 2 && scale?.mmPerPx) {
       const distance = calculate2dDistance(points[0], points[1], scale.mmPerPx);
@@ -211,26 +233,51 @@ const MeasurePage: React.FC = () => {
     }
   }, [points, scale, setMeasurement, unit]);
 
-  // --- 2D描画 ---
+  // --- 2D描画（毎回: まず背景写真→オーバーレイ） ---
   useEffect(() => {
     if (xrSession) return;
+
     const canvas = canvas2dRef.current;
+    const bg = photoCanvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // 背景写真がある場合はサイズも写真に合わせる
+    if (bg) {
+      if (canvas.width !== bg.width || canvas.height !== bg.height) {
+        canvas.width = bg.width;
+        canvas.height = bg.height;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bg, 0, 0);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
-    if (points.length === 2 && useMeasureStore.getState().measurement) {
-      const { measurement } = useMeasureStore.getState();
+    // ★変更: 線の描画は「計測(mm)があるかどうか」に依存しない
+    if (points.length === 2) {
       drawMeasurementLine(ctx, points[0], points[1]);
+
+      // ラベル位置
       const labelPos = {
         x: (points[0].x + points[1].x) / 2,
         y: (points[0].y + points[1].y) / 2,
       };
-      const formatted = formatMeasurement(measurement!.valueMm!, measurement!.unit);
-      drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
+
+      // ★変更: mm計測がなければ px 距離を表示（未校正）
+      const { measurement } = useMeasureStore.getState();
+      if (measurement?.valueMm && measurement.unit) {
+        const formatted = formatMeasurement(measurement.valueMm, measurement.unit);
+        drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
+      } else {
+        const dx = points[0].x - points[1].x;
+        const dy = points[0].y - points[1].y;
+        const distPx = Math.hypot(dx, dy);
+        const text = `${Math.round(distPx)} px（未校正）`;
+        drawMeasurementLabel(ctx, text, labelPos.x, labelPos.y);
+      }
     }
   }, [points, xrSession]);
 
@@ -365,6 +412,9 @@ const MeasurePage: React.FC = () => {
         return;
       }
 
+      // ARへ入るので、写真背景はクリア（安全策）
+      photoCanvasRef.current = null;
+
       const renderer = ensureRenderer();
       const sessionInit: XRSessionInit = {
         requiredFeatures: ['hit-test', 'local-floor'] as any,
@@ -437,9 +487,9 @@ const MeasurePage: React.FC = () => {
       <MeasureUIComponent
         onStartARSession={startARSession}
         onToggleCameraFacingMode={toggleCameraFacingMode}
-        onCapturePhoto={onCapturePhoto}     // ← 追加
-        onPickPhoto={onPickPhoto}           // ← 追加
-        isArSupported={isArSupported}       // ← 追加
+        onCapturePhoto={onCapturePhoto}
+        onPickPhoto={onPickPhoto}
+        isArSupported={isArSupported}
       />
 
       {/* 隠しファイル入力（写真選択用） */}
