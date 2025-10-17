@@ -4,6 +4,7 @@
 
 export type ReferenceKey =
   | 'credit-card-width'
+  | 'credit-card-height'   // ★追加：カード縦幅
   | 'a4-width'
   | 'a4-height'
   | 'coin-1'
@@ -15,7 +16,8 @@ export type ReferenceKey =
   | 'note-1000-width'
   | 'note-2000-width'
   | 'note-5000-width'
-  | 'note-10000-width';
+  | 'note-10000-width'     // ★追加：一万円札の横幅
+  ;
 
 export interface ReferenceItem {
   key: ReferenceKey;
@@ -35,7 +37,8 @@ export interface ReferenceItem {
  * 注：公称値ベース。実物の摩耗や撮影角度・レンズ歪みで誤差が出ます。
  */
 export const REFERENCE_LIST: readonly ReferenceItem[] = [
-  { key: 'credit-card-width', label: 'クレジットカードの横幅（85.60mm）', mm: 85.6 },
+  { key: 'credit-card-width',  label: 'クレジットカードの横幅（85.60mm）', mm: 85.6 },
+  { key: 'credit-card-height', label: 'クレジットカードの縦幅（53.98mm）', mm: 53.98 }, // ★追加
 
   { key: 'a4-width',  label: 'A4 短辺（210mm）', mm: 210 },
   { key: 'a4-height', label: 'A4 長辺（297mm）', mm: 297 },
@@ -50,7 +53,7 @@ export const REFERENCE_LIST: readonly ReferenceItem[] = [
   { key: 'note-1000-width',  label: '千円札の横幅（150mm）',  mm: 150 },
   { key: 'note-2000-width',  label: '二千円札の横幅（154mm）', mm: 154 },
   { key: 'note-5000-width',  label: '五千円札の横幅（150mm）', mm: 150 },
-  { key: 'note-10000-width', label: '一万円札の横幅（150mm）', mm: 150 },
+  { key: 'note-10000-width', label: '一万円札の横幅（160mm）', mm: 160 }, // ★修正: 実寸160mm
 ] as const;
 
 /** key → ReferenceItem の検索用マップ */
