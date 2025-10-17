@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Point } from '../core/fallback/utils';
-import { ScaleEstimation } from '../core/reference/ScaleEstimation'; // mmPerPx を含む型を想定
+import { ScaleEstimation } from '../core/reference/ScaleEstimation';
+import type { Homography } from '../core/geometry/homography';
 
 // 3D点
 export interface Point3D {
@@ -39,8 +40,16 @@ export type ErrorState = {
 
 export interface MeasureState {
   measureMode: MeasureMode;
-  /** 画像上の 1px あたりの mm（校正結果）。null なら未校正 */
+
+  /** 画像上の 1px あたりの mm（一次校正：等倍率） */
   scale: ScaleEstimation | null;
+
+  /** 平面校正：四隅（画像px座標、最大4点） */
+  calibCorners: Point[];
+
+  /** 平面校正：画像px → 平面mm のホモグラフィ（遠近補正） */
+  homography: Homography | null;
+
   error: ErrorState | null;
 
   /** 2D計測点（写真/カメラ上） */
@@ -66,6 +75,14 @@ export interface MeasureState {
   /** mmPerPx を直接設定（nullならリセット） */
   setScaleMmPerPx: (mmPerPx: number | null) => void;
 
+  /** 四隅の追加（最大4点）。5点目以降はリセットして新規開始。 */
+  addCalibCorner: (p: Point) => void;
+  /** 四隅のクリア */
+  clearCalibCorners: () => void;
+
+  /** ホモグラフィの設定/解除 */
+  setHomography: (H: Homography | null) => void;
+
   setError: (error: ErrorState | null) => void;
   addPoint: (point: Point) => void;
   addPoint3d: (point: Point3D) => void;
@@ -83,6 +100,10 @@ export interface MeasureState {
 export const useMeasureStore = create<MeasureState>((set) => ({
   measureMode: 'furniture',
   scale: null,
+
+  calibCorners: [],
+  homography: null,
+
   error: null,
 
   points: [],
@@ -103,22 +124,32 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   // 既存互換のスケール設定
   setScale: (scale) => set({ scale }),
 
-  // ★ 追加：mmPerPx を直接設定（手動校正で使用）
+  // mmPerPx を直接設定（手動校正で使用）
   setScaleMmPerPx: (mmPerPx) =>
     set(() => {
       if (mmPerPx == null || Number.isNaN(mmPerPx) || !Number.isFinite(mmPerPx)) {
-        return { scale: null }; // リセット
+        return { scale: null };
       }
-      // ScaleEstimation が { mmPerPx: number } である前提
       const scaleObj = { mmPerPx } as ScaleEstimation;
       return { scale: scaleObj };
     }),
+
+  // 四隅の管理（最大4。5つ目が来たらやり直し）
+  addCalibCorner: (p) =>
+    set((state) => {
+      if (state.calibCorners.length >= 4) {
+        return { calibCorners: [p] };
+      }
+      return { calibCorners: [...state.calibCorners, p] };
+    }),
+  clearCalibCorners: () => set({ calibCorners: [] }),
+
+  setHomography: (H) => set({ homography: H }),
 
   setError: (error) => set({ error }),
 
   addPoint: (point) =>
     set((state) => {
-      // 3点目が来たらリセットして新しい1点目に（常に最新の2点で測定）
       if (state.points.length >= 2) {
         return { points: [point], points3d: [], measurement: null };
       }

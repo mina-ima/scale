@@ -14,6 +14,9 @@ import {
 } from '../core/render/drawMeasurement';
 import { createRenderLoop } from '../core/ar/renderLoopUtils';
 
+// ★ 追加：ホモグラフィ適用（遠近補正）
+import { distanceWithHomography } from '../core/geometry/homography';
+
 const MeasurePage: React.FC = () => {
   const canvas2dRef = useRef<HTMLCanvasElement>(null);
   const canvasWebGLRef = useRef<HTMLCanvasElement>(null);
@@ -49,7 +52,14 @@ const MeasurePage: React.FC = () => {
     isArMode,
     setError,
     error: globalError,
-    setScaleMmPerPx, // ★変更: 手動校正（mm/px）を設定/リセット
+    setScaleMmPerPx, // 手動校正（mm/px）を設定/リセット
+
+    // ★ 追加：平面校正（四隅 & H）
+    calibCorners,
+    addCalibCorner,
+    clearCalibCorners,
+    homography,
+    setHomography,
   } = useMeasureStore();
 
   console.log('MeasurePage: rendered', { isArMode, globalError });
@@ -87,10 +97,10 @@ const MeasurePage: React.FC = () => {
       return;
     }
 
-    const video = videoRef.current;
+    const video = videoRef.current as HTMLVideoElement | null;
     if (!video) return;
 
-    console.log('MeasurePage: Current videoRef.current.srcObject:', video.srcObject);
+    console.log('MeasurePage: Current videoRef.current.srcObject:', (video as any).srcObject);
 
     // 同一ストリームなら何もしない
     if (stream && (video as any).srcObject === stream) return;
@@ -164,8 +174,10 @@ const MeasurePage: React.FC = () => {
       const ctx = displayCanvas.getContext('2d');
       ctx?.drawImage(off, 0, 0);
 
-      // ★変更: 新しい写真になったらスケールと点をリセット
+      // ★ 新しい写真になったら状態をリセット（四隅・H・スケール・点）
       clearPoints();
+      clearCalibCorners();
+      setHomography(null);
       setScaleMmPerPx(null);
 
       setIsArMode(false);
@@ -174,7 +186,7 @@ const MeasurePage: React.FC = () => {
       console.error('capturePhoto failed', e);
       setError('写真の取得に失敗しました');
     }
-  }, [setIsArMode, setError, drawCover, clearPoints, setScaleMmPerPx]);
+  }, [setIsArMode, setError, drawCover, clearPoints, clearCalibCorners, setHomography, setScaleMmPerPx]);
 
   // --- 写真計測: 端末から選択（coverで合成して保存＆表示） ---
   const onPickPhoto = useCallback(() => {
@@ -208,8 +220,10 @@ const MeasurePage: React.FC = () => {
       const ctx = displayCanvas.getContext('2d');
       ctx?.drawImage(off, 0, 0);
 
-      // ★変更: 新しい写真になったらスケールと点をリセット
+      // ★ 新しい写真になったら状態をリセット（四隅・H・スケール・点）
       clearPoints();
+      clearCalibCorners();
+      setHomography(null);
       setScaleMmPerPx(null);
 
       setIsArMode(false);
@@ -217,26 +231,35 @@ const MeasurePage: React.FC = () => {
     };
     img.onerror = () => setError('画像の読み込みに失敗しました');
     img.src = URL.createObjectURL(file);
-  }, [setIsArMode, setError, drawCover, clearPoints, setScaleMmPerPx]);
+  }, [setIsArMode, setError, drawCover, clearPoints, clearCalibCorners, setHomography, setScaleMmPerPx]);
 
-  // --- クリック処理（CSS座標→キャンバス座標へ変換） ---
+  // --- クリック処理（CSS座標→キャンバス座標へ変換）
+  // ルール：homography 未確定 かつ calibCorners < 4 の間は「四隅収集」優先。
+  //         4点集まった後は通常の2点計測に使用。
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (xrSession) {
         setIsTapping(true);
+        return;
+      }
+      const canvas = canvas2dRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (event.clientX - rect.left) * scaleX;
+      const y = (event.clientY - rect.top) * scaleY;
+
+      if (!homography && calibCorners.length < 4) {
+        // 平面校正の四隅を先に集める
+        addCalibCorner({ x, y });
       } else {
-        const canvas = canvas2dRef.current;
-        if (canvas) {
-          const rect = canvas.getBoundingClientRect();
-          const scaleX = canvas.width / rect.width;
-          const scaleY = canvas.height / rect.height;
-          const x = (event.clientX - rect.left) * scaleX;
-          const y = (event.clientY - rect.top) * scaleY;
-          addPoint({ x, y });
-        }
+        // 通常の測定ポイントとして扱う
+        addPoint({ x, y });
       }
     },
-    [xrSession, addPoint]
+    [xrSession, addPoint, addCalibCorner, calibCorners.length, homography]
   );
 
   // --- 3D距離計算（AR） ---
@@ -262,20 +285,37 @@ const MeasurePage: React.FC = () => {
     }
   }, [points3d, setMeasurement, unit, clearPoints, setArError]);
 
-  // --- 2D距離計算（フォールバック: mm換算はスケールがある場合のみ） ---
+  // --- 2D距離計算（フォールバック: H があれば最優先で mm算出、なければ mm/px、最後に px）
   useEffect(() => {
-    if (points.length === 2 && (scale as any)?.mmPerPx) {
-      const mmPerPx = (scale as any).mmPerPx as number;
-      const distance = calculate2dDistance(points[0], points[1], mmPerPx);
-      setMeasurement({
-        mode: 'furniture',
-        measurementMethod: 'fallback',
-        valueMm: distance,
-        unit,
-        dateISO: new Date().toISOString(),
-      });
+    if (points.length === 2) {
+      let valueMm: number | null = null;
+
+      if (homography) {
+        // 遠近補正あり：画像px→平面mmで距離
+        try {
+          valueMm = distanceWithHomography(homography, points[0], points[1]);
+        } catch {
+          valueMm = null;
+        }
+      } else if ((scale as any)?.mmPerPx) {
+        const mmPerPx = (scale as any).mmPerPx as number;
+        valueMm = calculate2dDistance(points[0], points[1], mmPerPx);
+      }
+
+      if (valueMm != null && Number.isFinite(valueMm)) {
+        setMeasurement({
+          mode: 'furniture',
+          measurementMethod: 'fallback',
+          valueMm,
+          unit,
+          dateISO: new Date().toISOString(),
+        });
+      } else {
+        // mm にできない場合（未校正/失敗）は measurement をクリアして px 表示に任せる
+        setMeasurement(null);
+      }
     }
-  }, [points, scale, setMeasurement, unit]);
+  }, [points, scale, homography, setMeasurement, unit]);
 
   // --- 2D描画（毎回: まず背景写真→オーバーレイ） ---
   useEffect(() => {
@@ -300,6 +340,27 @@ const MeasurePage: React.FC = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
+    // ★ 四隅収集中はマーカーを描画（1〜4）
+    if (!homography && calibCorners.length > 0) {
+      ctx.save();
+      ctx.fillStyle = '#10b981'; // teal
+      ctx.strokeStyle = '#065f46';
+      ctx.lineWidth = 2;
+      ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+      ctx.textBaseline = 'top';
+      calibCorners.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillText(String(i + 1), p.x + 8, p.y + 8);
+        ctx.fillStyle = '#10b981';
+      });
+      ctx.restore();
+    }
+
+    // 計測線・ラベル
     if (points.length === 2) {
       drawMeasurementLine(ctx, points[0], points[1]);
 
@@ -320,7 +381,7 @@ const MeasurePage: React.FC = () => {
         drawMeasurementLabel(ctx, text, labelPos.x, labelPos.y);
       }
     }
-  }, [points, xrSession]);
+  }, [points, xrSession, calibCorners, homography]);
 
   // --- ARレンダーループ ---
   useEffect(() => {
