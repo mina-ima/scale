@@ -8,7 +8,7 @@
 
 ## 0. 事前準備 / 環境（P0）
 
-- [ ] Node.js 20.x をインストール（LTS）。
+- [x] Node.js 20.x をインストール（LTS）。
 - [x] パッケージマネージャを選定して固定（`pnpm` 推奨）。
 - [x] Android/Chrome 最新端末を準備（HD/FHD/WQHD の少なくとも1機種）。
 - [ ] iOS/Safari 参考端末（任意）を準備。
