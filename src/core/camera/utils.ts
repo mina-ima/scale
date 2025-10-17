@@ -4,6 +4,14 @@ export const getCameraStream = async (
   facingMode: 'user' | 'environment' | undefined = 'environment'
 ): Promise<MediaStream | ErrorState> => {
   try {
+    if (!navigator.mediaDevices) {
+      return {
+        name: 'CameraError',
+        title: 'カメラ非対応',
+        code: 'CAMERA_UNAVAILABLE',
+        message: 'MediaDevices API is not available in this environment.',
+      };
+    }
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: facingMode },
     });

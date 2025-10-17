@@ -15,8 +15,8 @@ import {
 import { createRenderLoop } from '../core/ar/renderLoopUtils';
 
 const MeasurePage: React.FC = () => {
-  console.log('MeasurePage: rendered');
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvas2dRef = useRef<HTMLCanvasElement>(null);
+  const canvasWebGLRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef(new THREE.Scene());
@@ -47,57 +47,24 @@ const MeasurePage: React.FC = () => {
     setArError,
     setIsWebXrSupported,
     setIsArMode,
+    isArMode,
+    setError,
+    error: globalError, // Rename to avoid conflict with useCamera error
   } = useMeasureStore();
 
-  const { stream, toggleCameraFacingMode } = useCamera();
+  console.log('MeasurePage: rendered', { isArMode, globalError });
 
-  const startARSession = useCallback(async () => {
-    if (!canvasRef.current) return;
-
-    const renderer = new THREE.WebGLRenderer({
-      canvas: canvasRef.current,
-      alpha: true,
-      antialias: true,
-    });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    rendererRef.current = renderer;
-
-    try {
-      const session = await navigator.xr?.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-test'],
-      });
-
-      if (session) {
-        setXrSession(session);
-        setIsArMode(true);
-        renderer.xr.setSession(session);
-
-        session.addEventListener('end', () => {
-          setXrSession(null);
-          setIsArMode(false);
-          clearPoints();
-        });
-      } else {
-        setArError('ARセッションの開始に失敗しました。');
-      }
-    } catch {
-      setArError('ARセッションの開始中にエラーが発生しました。');
-    }
-  }, [setXrSession, setIsArMode, clearPoints, setArError]);
-
-  useEffect(() => {
-    const initWebXrSupport = async () => {
-      const supported = await isWebXRAvailable();
-      setIsWebXrSupported(supported);
-    };
-    initWebXrSupport();
-  }, [setIsWebXrSupported]); // setIsWebXrSupported はuseCallbackでメモ化されているため、初回レンダリング時のみ実行される
+  const { stream, error: cameraError, toggleCameraFacingMode } = useCamera(); // Rename to avoid conflict with global error
 
   useEffect(() => {
     // startCamera() は useCamera フックの内部で facingMode の変更に応じて自動的に呼び出される
     // ここでは stream の変更に応じて video 要素を更新する
-    console.log('MeasurePage: useEffect triggered with stream:', stream);
+    console.log('MeasurePage: useEffect triggered with stream:', stream, 'cameraError:', cameraError);
+    if (cameraError) {
+      setError(cameraError);
+      setIsArMode(false);
+      return;
+    }
     if (videoRef.current) {
       console.log(
         'MeasurePage: Current videoRef.current.srcObject:',
@@ -124,15 +91,15 @@ const MeasurePage: React.FC = () => {
         videoRef.current.srcObject = null;
       }
     }
-  }, [stream]);
+  }, [stream, cameraError, setError, setIsArMode]);
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (xrSession) {
         setIsTapping(true);
       } else {
-        if (canvasRef.current) {
-          const rect = canvasRef.current.getBoundingClientRect();
+        if (canvas2dRef.current) {
+          const rect = canvas2dRef.current.getBoundingClientRect();
           const x = event.clientX - rect.left;
           const y = event.clientY - rect.top;
           addPoint({ x, y });
@@ -180,7 +147,7 @@ const MeasurePage: React.FC = () => {
   useEffect(() => {
     if (xrSession) return; // Only run in fallback mode
 
-    const canvas = canvasRef.current;
+    const canvas = canvas2dRef.current;
     if (!canvas) return;
 
     const context = canvas.getContext('2d');
@@ -210,6 +177,7 @@ const MeasurePage: React.FC = () => {
   }, [points, xrSession]);
 
   useEffect(() => {
+    console.log('MeasurePage useEffect for AR render loop:', { xrSession, rendererRef: rendererRef.current, sceneRef: sceneRef.current, cameraRef: cameraRef.current });
     if (!xrSession || !rendererRef.current) return;
 
     const renderer = rendererRef.current;
@@ -299,10 +267,6 @@ const MeasurePage: React.FC = () => {
     clearPoints,
     points3d,
     setIsPlaneDetected,
-    sceneRef,
-    cameraRef,
-    rendererRef,
-    reticleRef,
   ]);
 
   useEffect(() => {
@@ -338,7 +302,7 @@ const MeasurePage: React.FC = () => {
     if (isArMode && !xrSession) {
       startARSession();
     }
-  }, [xrSession, startARSession]);
+  }, [xrSession]);
 
   return (
     <div
@@ -346,18 +310,28 @@ const MeasurePage: React.FC = () => {
       className="relative w-full h-screen"
       onClick={handleCanvasClick}
     >
-      <video
-        ref={videoRef}
-        className="absolute top-0 left-0 w-full h-full object-cover z-[-1]"
-        autoPlay
-        muted
-        playsInline
-      />
-      <canvas
-        ref={canvasRef}
-        data-testid="measure-canvas"
-        className="absolute top-0 left-0 w-full h-full z-0"
-      />
+      {stream && !error && (
+        <video
+          ref={videoRef}
+          className="absolute top-0 left-0 w-full h-full object-cover z-[-1]"
+          autoPlay
+          muted
+          playsInline
+        />
+      )}
+      {isArMode ? (
+        <canvas
+          ref={canvasWebGLRef}
+          data-testid="measure-canvas-webgl"
+          className="absolute top-0 left-0 w-full h-full z-0"
+        />
+      ) : (
+        <canvas
+          ref={canvas2dRef}
+          data-testid="measure-canvas-2d"
+          className="absolute top-0 left-0 w-full h-full z-0"
+        />
+      )}
       <MeasureUIComponent
         onStartARSession={startARSession}
         onToggleCameraFacingMode={toggleCameraFacingMode}

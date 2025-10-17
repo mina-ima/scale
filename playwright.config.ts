@@ -12,11 +12,11 @@ export default defineConfig({
     command: 'pnpm dev',
     url: 'http://localhost:5174',
     timeout: 120000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
   },
   use: {
     trace: 'on-first-retry',
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:5174',
     headless: false,
     launchOptions: {
       args: [

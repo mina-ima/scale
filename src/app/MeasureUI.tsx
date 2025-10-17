@@ -23,12 +23,24 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
     isWebXrSupported,
     facingMode,
     clearPoints,
-    // setIsArMode, // 直接呼び出すのをやめる
-    // setCameraToggleRequested, // 直接呼び出すのをやめる
+    error, // Get global error state
   } = useMeasureStore();
 
+  console.log('MeasureUIComponent: rendered', { error, isArMode, isWebXrSupported });
+
   const getInstructionText = () => {
-    if (!isArMode) return null;
+    if (error) {
+      // Display global camera error
+      return `エラー: ${error.title} - ${error.message}`;
+    }
+    if (!isArMode) {
+      // If AR is not active, and no global error, check WebXR support
+      if (!isWebXrSupported) {
+        return 'お使いの端末はAR非対応です。写真で計測に切り替えます。';
+      }
+      return null; // No specific instruction if AR is not active and no error
+    }
+    // AR mode instructions
     if (arError) return `エラー: ${arError}`;
     if (!isPlaneDetected)
       return 'AR: デバイスを動かして周囲の平面を検出してください。';
@@ -48,13 +60,13 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
             {formatMeasurement(measurement.valueMm, unit)}
           </p>
         )}
-        {isWebXrSupported && !isArMode && (
+        {/* AR計測開始ボタンは、WebXRがサポートされており、ARモードがアクティブでなく、かつエラーがない場合にのみ表示 */}
+        {isWebXrSupported && !isArMode && !error && (
           <button
             className="mt-2 ml-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
             onClick={(e) => {
               e.stopPropagation();
               if (onStartARSession) {
-                // ガードを追加
                 onStartARSession();
               }
             }}
@@ -62,27 +74,31 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
             AR計測を開始
           </button>
         )}
-        {
+        {/* カメラ切り替えボタンは、ARモードがアクティブでない、またはARがサポートされていない場合にのみ表示 */}
+        {!isArMode && !error && (
           <button
             className="mt-2 ml-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             onClick={(e) => {
               e.stopPropagation();
-              onToggleCameraFacingMode(); // propsとして受け取った関数を呼び出す
+              onToggleCameraFacingMode();
             }}
           >
             カメラ切り替え (
             {facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
           </button>
-        }
-        <button
-          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-          onClick={(e) => {
-            e.stopPropagation();
-            clearPoints();
-          }}
-        >
-          リセット
-        </button>
+        )}
+        {/* リセットボタンは、エラーがない場合にのみ表示 */}
+        {!error && (
+          <button
+            className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            onClick={(e) => {
+              e.stopPropagation();
+              clearPoints();
+            }}
+          >
+            リセット
+          </button>
+        )}
       </div>
     </div>
   );

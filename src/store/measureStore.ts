@@ -29,6 +29,7 @@ export type ErrorState = {
   message: string;
   code?:
     | 'CAMERA_DENIED'
+    | 'CAMERA_UNAVAILABLE'
     | 'XR_UNAVAILABLE'
     | 'PLANE_NOT_FOUND'
     | 'SAVE_FAILED'
