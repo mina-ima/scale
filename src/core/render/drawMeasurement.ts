@@ -4,32 +4,31 @@ import { getOptimalTextColorForRegion } from '../../utils/colorUtils';
 const TEXT_BACKGROUND_COLOR = 'rgba(255, 255, 255, 0.7)';
 const TEXT_PADDING = 10;
 
+export const drawMeasurementPoint = (
+  context: CanvasRenderingContext2D,
+  p: Point,
+  color: string = '#FF007F',
+  radius: number = 10
+): void => {
+  context.beginPath();
+  context.fillStyle = color;
+  context.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  context.fill();
+};
+
 export const drawMeasurementLine = (
   context: CanvasRenderingContext2D,
   p1: Point,
   p2: Point,
   color: string = '#FF007F', // Default to a bright pink
-  lineWidth: number = 5,
-  radius: number = 10
+  lineWidth: number = 5
 ): void => {
   context.beginPath();
   context.strokeStyle = color;
-  context.fillStyle = color;
   context.lineWidth = lineWidth;
-
-  // Draw line
   context.moveTo(p1.x, p1.y);
   context.lineTo(p2.x, p2.y);
   context.stroke();
-
-  // Draw circles at endpoints
-  context.beginPath();
-  context.arc(p1.x, p1.y, radius, 0, Math.PI * 2);
-  context.fill();
-
-  context.beginPath();
-  context.arc(p2.x, p2.y, radius, 0, Math.PI * 2);
-  context.fill();
 };
 
 export const drawMeasurementLabel = (

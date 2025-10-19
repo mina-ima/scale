@@ -11,6 +11,7 @@ import { formatMeasurement } from '../core/measure/format';
 import {
   drawMeasurementLine,
   drawMeasurementLabel,
+  drawMeasurementPoint,
 } from '../core/render/drawMeasurement';
 import { createRenderLoop } from '../core/ar/renderLoopUtils';
 
@@ -334,33 +335,48 @@ const MeasurePage: React.FC = () => {
 
     // 測定線・ラベル
     if (points.length > 0) {
-      const { selectionMode, calibrationMode } = useMeasureStore.getState();
-      const isCalibrating = selectionMode === 'calibrate-plane' || calibrationMode === 'length';
+      const { selectionMode } = useMeasureStore.getState();
+      const isCalibrating = selectionMode === 'calibrate-plane';
       const markerColor = isCalibrating ? '#007FFF' : '#FF007F'; // 青 or ピンク
 
-      if (points.length === 1) {
-        // 1点だけ描画
-        drawMeasurementLine(ctx, points[0], points[0], markerColor);
-      } else if (points.length === 2) {
-        drawMeasurementLine(ctx, points[0], points[1], markerColor);
+      // 全ての点を描画
+      points.forEach(p => {
+        drawMeasurementPoint(ctx, p, markerColor);
+      });
 
-        const labelPos = {
-          x: (points[0].x + points[1].x) / 2,
-          y: (points[0].y + points[1].y) / 2,
-        };
+      // 線を描画
+      if (isCalibrating) {
+        // 4点補正モード: 点を順番に結ぶ
+        for (let i = 0; i < points.length - 1; i++) {
+          drawMeasurementLine(ctx, points[i], points[i+1], markerColor);
+        }
+        // 4点目が押されたら、4点目と1点目を結んで四角形を閉じる
+        if (points.length === 4) {
+          drawMeasurementLine(ctx, points[3], points[0], markerColor);
+        }
+      } else {
+        // 2点測定モード: 2点間を結ぶ
+        if (points.length === 2) {
+          drawMeasurementLine(ctx, points[0], points[1], markerColor);
 
-        const { measurement } = useMeasureStore.getState();
+          const labelPos = {
+            x: (points[0].x + points[1].x) / 2,
+            y: (points[0].y + points[1].y) / 2,
+          };
 
-        if (measurement?.valueMm && measurement.unit) {
-          const formatted = formatMeasurement(measurement.valueMm, measurement.unit);
-          drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
-        } else {
-          // 校正なしのときは px 表示
-          const dx = points[0].x - points[1].x;
-          const dy = points[0].y - points[1].y;
-          const distPx = Math.hypot(dx, dy);
-          const text = `${Math.round(distPx)} px（未校正）`;
-          drawMeasurementLabel(ctx, text, labelPos.x, labelPos.y);
+          const { measurement } = useMeasureStore.getState();
+
+          if (measurement?.valueMm && measurement.unit) {
+            const formatted = formatMeasurement(measurement.valueMm, measurement.unit);
+            drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
+          } else {
+            // 校正なしのときは px 表示
+            const dx = points[0].x - points[1].x;
+            const dy = points[0].y - points[1].y;
+            const distPx = Math.hypot(dx, dy);
+            const text = `${Math.round(distPx)} px（未校正）`;
+            drawMeasurementLabel(ctx, text, labelPos.x, labelPos.y);
+          }
         }
       }
     }
