@@ -219,296 +219,585 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
     }
   };
 
-  const uiContent = (
-    <div className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none flex flex-col justify-between">
-      {/* 上部: 計測結果とガイド */}
-      <div className="p-4 pointer-events-auto">
-        <div className="bg-white/80 backdrop-blur p-3 rounded shadow max-w-full">
-          <h1 className="text-xl font-bold">計測モード</h1>
-          <p className="text-orange-600 text-sm mb-2">{getInstructionText()}</p>
-          {measurement?.valueMm && (
-            <p className="text-lg font-medium">
-              {formatMeasurement(measurement.valueMm, unit)}
-            </p>
-          )}
-        </div>
-      </div>
+    const uiContent = (
 
-      {/* 下部: 操作パネル */}
-      <div className="p-4 pointer-events-auto">
-        <div className="bg-black/50 backdrop-blur p-4 rounded-lg shadow-lg">
-          {/* 操作用ボタン群 */}
-          <div className="flex flex-wrap gap-2 justify-center">
-            {/* AR開始（対応時） */}
-            {!isArMode && !error && (
-              <button
-                className={`px-3 py-2 rounded text-white ${isWebXrSupported && isArSupported ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isWebXrSupported && isArSupported) onStartARSession();
-                }}
-                disabled={!isWebXrSupported || !isArSupported}
-                title={(!isWebXrSupported || !isArSupported) ? 'この端末ではWebXR ARを利用できません' : 'AR計測を開始'}
-              >
-                AR計測を開始{(!isWebXrSupported || !isArSupported) ? '（未対応）' : ''}
-              </button>
+      <div className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none flex flex-col justify-between">
+
+        {/* 上部: 計測結果とガイド */}
+
+        <div className="p-4 pointer-events-auto">
+
+          <div className="bg-white/80 backdrop-blur p-3 rounded shadow max-w-full">
+
+            <h1 className="text-xl font-bold">計測モード</h1>
+
+            <p className="text-orange-600 text-sm mb-2">{getInstructionText()}</p>
+
+            {measurement?.valueMm && (
+
+              <p className="text-lg font-medium">
+
+                {formatMeasurement(measurement.valueMm, unit)}
+
+              </p>
+
             )}
+
+          </div>
+
+        </div>
+
+  
+
+        {/* 上部中央: カメラ操作ボタン群 (新設) */}
+
+        <div className="px-4 py-2 pointer-events-auto flex justify-center">
+
+          <div className="bg-black/50 backdrop-blur p-2 rounded-lg shadow-lg flex flex-wrap gap-2">
+
+            {/* AR開始（対応時） */}
+
+            {!isArMode && !error && (
+
+              <button
+
+                className={`px-3 py-2 rounded text-white ${isWebXrSupported && isArSupported ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
+
+                onClick={(e) => {
+
+                  e.stopPropagation();
+
+                  if (isWebXrSupported && isArSupported) onStartARSession();
+
+                }}
+
+                disabled={!isWebXrSupported || !isArSupported}
+
+                title={(!isWebXrSupported || !isArSupported) ? 'この端末ではWebXR ARを利用できません' : 'AR計測を開始'}
+
+              >
+
+                AR計測を開始{(!isWebXrSupported || !isArSupported) ? '（未対応）' : ''}
+
+              </button>
+
+            )}
+
+  
 
             {/* カメラ切替 */}
+
             {!isArMode && !error && (
+
               <button
+
                 className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+
                 onClick={(e) => {
+
                   e.stopPropagation();
+
                   onToggleCameraFacingMode();
+
                 }}
+
                 title="イン/アウトカメラを切り替え"
+
               >
+
                 カメラ切替（{facingMode === 'user' ? 'イン' : 'アウト'}）
+
               </button>
+
             )}
+
+  
 
             {/* 写真計測 */}
+
             {!isArMode && !error && (
+
               <>
-                <button
-                  className="px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCapturePhoto();
-                  }}
-                  title="現在のカメラ映像を写真として取り込み"
-                >
-                  写真を撮る
-                </button>
 
                 <button
-                  className="px-3 py-2 bg-emerald-700 text-white rounded hover:bg-emerald-800"
+
+                  className="px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+
                   onClick={(e) => {
+
                     e.stopPropagation();
-                    onPickPhoto();
+
+                    onCapturePhoto();
+
                   }}
-                  title="端末から写真を選択"
+
+                  title="現在のカメラ映像を写真として取り込み"
+
                 >
-                  写真を選ぶ
+
+                  写真を撮る
+
                 </button>
+
+  
+
+                <button
+
+                  className="px-3 py-2 bg-emerald-700 text-white rounded hover:bg-emerald-800"
+
+                  onClick={(e) => {
+
+                    e.stopPropagation();
+
+                    onPickPhoto();
+
+                  }}
+
+                  title="端末から写真を選択"
+
+                >
+
+                  写真を選ぶ
+
+                </button>
+
               </>
+
             )}
+
+  
 
             {/* リセット（ポイント） */}
+
             {!error && (
+
               <button
+
                 className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+
                 onClick={(e) => {
+
                   e.stopPropagation();
+
                   clearPoints();
+
                 }}
+
                 title="ポイントをクリア"
+
               >
+
                 リセット
+
               </button>
+
             )}
+
           </div>
 
-          {/* キャリブレーションパネル */}
-          <div className="mt-4 bg-white/90 p-3 rounded">
+        </div>
+
+  
+
+  
+
+        {/* 下部: キャリブレーションパネル */}
+
+        <div className="p-4 pointer-events-auto">
+
+          <div className="bg-black/50 backdrop-blur p-4 rounded-lg shadow-lg">
+
             {/* ===== 校正方法選択タブ ===== */}
+
             <div className="flex border-b border-gray-300">
+
               <button
+
                 className={`px-4 py-2 text-sm font-medium ${
+
                   calibrationMode === 'length'
+
                     ? 'border-b-2 border-indigo-500 text-indigo-600'
+
                     : 'text-gray-500 hover:text-gray-700'
+
                 }`}
+
                 onClick={(e) => {
+
                   e.stopPropagation();
+
                   setCalibrationMode('length');
+
                 }}
+
               >
+
                 2点補正
+
               </button>
+
               <button
+
                 className={`px-4 py-2 text-sm font-medium ${
+
                   calibrationMode === 'plane'
+
                     ? 'border-b-2 border-indigo-500 text-indigo-600'
+
                     : 'text-gray-500 hover:text-gray-700'
+
                 }`}
+
                 onClick={(e) => {
+
                   e.stopPropagation();
+
                   setCalibrationMode('plane');
+
                 }}
+
               >
+
                 4点補正
+
               </button>
+
             </div>
 
+  
+
             {/* ===== 等倍率（2点）校正パネル ===== */}
+
             {calibrationMode === 'length' && (
+
               <div className="mt-3">
+
                 <div className="flex items-center gap-2 flex-wrap">
+
                   <span className="font-semibold text-sm">基準物（2点）</span>
+
                   <select
+
                     className="border rounded px-2 py-1 text-sm"
+
                     value={lenKey}
+
                     onChange={(e) => setLenKey(e.target.value as ReferenceKeyLength)}
+
                     onClick={(e) => e.stopPropagation()}
+
                     title="写真に写っている基準物を選択"
+
                   >
+
                     {LENGTH_PRESETS.map((r) => (
+
                       <option key={r.key} value={r.key}>{r.label}</option>
+
                     ))}
+
                   </select>
+
+  
 
                   {lenKey === 'customLength' && (
+
                     <input
+
                       type="number"
+
                       inputMode="decimal"
+
                       step="0.01"
+
                       min="0"
+
                       placeholder="長さ(mm)"
+
                       value={customMm}
+
                       onChange={(e) => setCustomMm(e.target.value)}
+
                       onClick={(e) => e.stopPropagation()}
+
                       className="border rounded px-2 py-1 w-28 text-sm"
+
                     />
+
                   )}
 
-                  <button
-                    className={`px-3 py-1.5 rounded text-white text-sm ${points.length === 2 && selectionMode !== 'calibrate-plane' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      applyLengthCalibration();
-                    }}
-                    disabled={!(points.length === 2 && selectionMode !== 'calibrate-plane')}
-                    title="写真上で基準物の両端を2点タップしてから適用"
-                  >
-                    適用
-                  </button>
+  
 
                   <button
-                    className="px-3 py-1.5 rounded border border-gray-400 hover:bg-gray-100 text-sm"
+
+                    className={`px-3 py-1.5 rounded text-white text-sm ${points.length === 2 && selectionMode !== 'calibrate-plane' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
+
                     onClick={(e) => {
+
                       e.stopPropagation();
-                      resetLengthCalibration();
+
+                      applyLengthCalibration();
+
                     }}
-                    title="等倍率校正を解除"
+
+                    disabled={!(points.length === 2 && selectionMode !== 'calibrate-plane')}
+
+                    title="写真上で基準物の両端を2点タップしてから適用"
+
                   >
-                    リセット
+
+                    適用
+
                   </button>
+
+  
+
+                  <button
+
+                    className="px-3 py-1.5 rounded border border-gray-400 hover:bg-gray-100 text-sm"
+
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+                      resetLengthCalibration();
+
+                    }}
+
+                    title="等倍率校正を解除"
+
+                  >
+
+                    リセット
+
+                  </button>
+
                 </div>
+
                 <div className="mt-2 text-xs text-gray-700">
+
                   <div>現在の点数: {points.length}</div>
+
                   <div>
+
                     {pxDistance != null
+
                       ? <>選択中の区間: {Math.round(pxDistance)} px</>
+
                       : <>2点をタップして区間を作成</>}
+
                   </div>
+
                   <div>
+
                     {currentMmPerPx
+
                       ? <>校正値: <b>{currentMmPerPx.toFixed(4)}</b> mm/px</>
+
                       : <>未校正</>}
+
                   </div>
+
                 </div>
+
               </div>
+
             )}
+
+  
 
             {/* ===== 平面補正（4点）パネル ===== */}
+
             {calibrationMode === 'plane' && (
+
               <div className="mt-3">
+
                 <div className="flex items-center gap-2 flex-wrap">
+
                   <span className="font-semibold text-sm">平面補正（4点）</span>
 
+  
+
                   {selectionMode !== 'calibrate-plane' ? (
+
                     <button
+
                       className="px-3 py-1.5 rounded text-white bg-teal-600 hover:bg-teal-700 text-sm"
+
                       onClick={(e) => { e.stopPropagation(); startPlaneCalibration(); }}
+
                       title="平面補正モードに入り、四隅を4点タップします"
+
                     >
+
                       開始
+
                     </button>
+
                   ) : (
+
                     <button
+
                       className="px-3 py-1.5 rounded bg-gray-100 border hover:bg-gray-200 text-sm"
+
                       onClick={(e) => { e.stopPropagation(); cancelPlaneCalibration(); }}
+
                       title="平面補正モードを終了（点はクリアされます）"
+
                     >
+
                       終了
+
                     </button>
+
                   )}
+
+  
 
                   <select
+
                     className="border rounded px-2 py-1 text-sm"
+
                     value={rectKey}
+
                     onChange={(e) => setRectKey(e.target.value as ReferenceKeyRect)}
+
                     onClick={(e) => e.stopPropagation()}
+
                     title="写真に写っている矩形基準を選択"
+
                   >
+
                     {Object.entries(RECT_PRESETS).map(([k, v]) => (
+
                       <option key={k} value={k}>
+
                         {v ? v.label : '任意の矩形（mm指定）'}
+
                       </option>
+
                     ))}
+
                   </select>
 
+  
+
                   {rectKey === 'customRect' && (
+
                     <>
+
                       <input
+
                         type="number"
+
                         inputMode="decimal"
+
                         step="0.01"
+
                         min="0"
+
                         placeholder="幅(mm)"
+
                         value={customRectW}
+
                         onChange={(e) => setCustomRectW(e.target.value)}
+
                         onClick={(e) => e.stopPropagation()}
+
                         className="border rounded px-2 py-1 w-24 text-sm"
+
                       />
+
                       <input
+
                         type="number"
+
                         inputMode="decimal"
+
                         step="0.01"
+
                         min="0"
+
                         placeholder="高さ(mm)"
+
                         value={customRectH}
+
                         onChange={(e) => setCustomRectH(e.target.value)}
+
                         onClick={(e) => e.stopPropagation()}
+
                         className="border rounded px-2 py-1 w-24 text-sm"
+
                       />
+
                     </>
+
                   )}
+
+  
 
                   <button
+
                     className={`px-3 py-1.5 rounded text-white text-sm ${
+
                       selectionMode === 'calibrate-plane' && points.length === 4
+
                         ? 'bg-teal-700 hover:bg-teal-800'
+
                         : 'bg-gray-400 cursor-not-allowed'
+
                     }`}
+
                     onClick={(e) => { e.stopPropagation(); applyPlaneCalibration(); }}
+
                     disabled={!(selectionMode === 'calibrate-plane' && points.length === 4)}
+
                     title="四隅を4点タップ後に適用"
+
                   >
+
                     適用
+
                   </button>
 
+  
+
                   {homography && (
+
                     <span className="text-xs text-teal-700 ml-2">ON</span>
+
                   )}
+
                 </div>
 
+  
+
                 <div className="mt-2 text-xs text-gray-700">
+
                   <div>現在の点数: {points.length}（最大4点）</div>
+
                   <div className="text-gray-600">
+
                     基準の四隅を時計回りでタップ
+
                   </div>
+
                   {calibMsg && <div className="mt-1 text-amber-700">{calibMsg}</div>}
+
                 </div>
+
               </div>
+
             )}
+
           </div>
+
         </div>
+
       </div>
-    </div>
-  );
+
+    );
 
   const overlayRoot = document.getElementById('ar-overlay');
   if (!overlayRoot) {
