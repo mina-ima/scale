@@ -333,26 +333,35 @@ const MeasurePage: React.FC = () => {
     }
 
     // 測定線・ラベル
-    if (points.length === 2) {
-      drawMeasurementLine(ctx, points[0], points[1]);
+    if (points.length > 0) {
+      const { selectionMode, calibrationMode } = useMeasureStore.getState();
+      const isCalibrating = selectionMode === 'calibrate-plane' || calibrationMode === 'length';
+      const markerColor = isCalibrating ? '#007FFF' : '#FF007F'; // 青 or ピンク
 
-      const labelPos = {
-        x: (points[0].x + points[1].x) / 2,
-        y: (points[0].y + points[1].y) / 2,
-      };
+      if (points.length === 1) {
+        // 1点だけ描画
+        drawMeasurementLine(ctx, points[0], points[0], markerColor);
+      } else if (points.length === 2) {
+        drawMeasurementLine(ctx, points[0], points[1], markerColor);
 
-      const { measurement } = useMeasureStore.getState();
+        const labelPos = {
+          x: (points[0].x + points[1].x) / 2,
+          y: (points[0].y + points[1].y) / 2,
+        };
 
-      if (measurement?.valueMm && measurement.unit) {
-        const formatted = formatMeasurement(measurement.valueMm, measurement.unit);
-        drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
-      } else {
-        // 校正なしのときは px 表示
-        const dx = points[0].x - points[1].x;
-        const dy = points[0].y - points[1].y;
-        const distPx = Math.hypot(dx, dy);
-        const text = `${Math.round(distPx)} px（未校正）`;
-        drawMeasurementLabel(ctx, text, labelPos.x, labelPos.y);
+        const { measurement } = useMeasureStore.getState();
+
+        if (measurement?.valueMm && measurement.unit) {
+          const formatted = formatMeasurement(measurement.valueMm, measurement.unit);
+          drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
+        } else {
+          // 校正なしのときは px 表示
+          const dx = points[0].x - points[1].x;
+          const dy = points[0].y - points[1].y;
+          const distPx = Math.hypot(dx, dy);
+          const text = `${Math.round(distPx)} px（未校正）`;
+          drawMeasurementLabel(ctx, text, labelPos.x, labelPos.y);
+        }
       }
     }
   }, [points, xrSession]);
