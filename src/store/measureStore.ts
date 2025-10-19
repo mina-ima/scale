@@ -41,7 +41,10 @@ export type ErrorState = {
 export type Homography = [number, number, number, number, number, number, number, number, number];
 
 // ★ 追加: クリック挙動を切り替えるモード
-export type SelectionMode = 'measure' | 'calibrate-plane' | 'calibrate-scale';
+export type SelectionMode = 'measure' | 'calibrate-plane';
+
+// ★ 追加: 補正方法の選択モード
+export type CalibrationMode = 'length' | 'plane';
 
 export interface MeasureState {
   measureMode: MeasureMode;
@@ -70,6 +73,9 @@ export interface MeasureState {
   /** クリック動作モード（2点測定 / 4点平面校正 など） */
   selectionMode: SelectionMode;
 
+  /** ★ 追加: 補正方法の選択モード */
+  calibrationMode: CalibrationMode;
+
   setMeasureMode: (mode: MeasureMode) => void;
 
   /** ScaleEstimation そのものを設定（既存互換） */
@@ -82,6 +88,9 @@ export interface MeasureState {
 
   /** ★ 追加: クリック動作モード切替 */
   setSelectionMode: (mode: SelectionMode) => void;
+
+  /** ★ 追加: 補正方法の選択モード切替 */
+  setCalibrationMode: (mode: CalibrationMode) => void;
 
   setError: (error: ErrorState | null) => void;
   addPoint: (point: Point) => void;
@@ -118,6 +127,7 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   facingMode: 'environment',
 
   selectionMode: 'measure',
+  calibrationMode: 'length', // 初期値は2点補正
 
   setMeasureMode: (mode) => set({ measureMode: mode }),
 
@@ -139,6 +149,9 @@ export const useMeasureStore = create<MeasureState>((set) => ({
 
   // ★ 追加: クリック動作モード
   setSelectionMode: (mode) => set({ selectionMode: mode }),
+
+  // ★ 追加: 補正方法の選択モード切替
+  setCalibrationMode: (mode) => set({ calibrationMode: mode }),
 
   setError: (error) => set({ error }),
 

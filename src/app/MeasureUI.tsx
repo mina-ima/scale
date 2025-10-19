@@ -81,6 +81,10 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
     // ★ 追加: クリックモード
     selectionMode,
     setSelectionMode,
+
+    // ★ 追加: 補正方法選択
+    calibrationMode,
+    setCalibrationMode,
   } = useMeasureStore();
 
   // 等倍率（2点）用
@@ -108,11 +112,18 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
       if (!isWebXrSupported || !isArSupported) {
         return 'この端末/ブラウザはWebXR ARに非対応です。写真計測をご利用ください。';
       }
-      // 写真計測時のガイダンス（必要に応じて）
-      if (selectionMode === 'calibrate-plane') {
-        return '平面補正: 写真上で「基準矩形の四隅」を時計回りで4点タップしてください。';
+      // 写真計測時のガイダンス
+      if (calibrationMode === 'plane') {
+        if (selectionMode === 'calibrate-plane') {
+          return `平面補正: 写真上で「基準矩形の四隅」を時計回りで${points.length}/4点タップしてください。`;
+        }
+        return '平面補正: 「平面補正モード開始」ボタンを押して、基準矩形の四隅をタップしてください。';
       }
-      return null;
+      // calibrationMode === 'length'
+      if (points.length < 2) {
+        return `2点補正: 写真上で「基準物の両端」を${points.length}/2点タップしてください。`;
+      }
+      return '2点補正: 基準物の長さを選択し、「適用」ボタンを押してください。';
     }
     if (arError) return `エラー: ${arError}`;
     if (!isPlaneDetected) return 'AR: デバイスを動かして周囲の平面を検出してください。';
@@ -294,165 +305,199 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
           )}
         </div>
 
-        {/* ===== 等倍率（2点）校正パネル ===== */}
-        <div className="mt-3 p-3 rounded bg-white/80 border border-gray-300">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold">基準物で校正（2点）</span>
-            <select
-              className="border rounded px-2 py-1"
-              value={lenKey}
-              onChange={(e) => setLenKey(e.target.value as ReferenceKeyLength)}
-              onClick={(e) => e.stopPropagation()}
-              title="写真に写っている基準物を選択"
-            >
-              {LENGTH_PRESETS.map((r) => (
-                <option key={r.key} value={r.key}>{r.label}</option>
-              ))}
-            </select>
-
-            {lenKey === 'customLength' && (
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                placeholder="基準の長さ(mm)"
-                value={customMm}
-                onChange={(e) => setCustomMm(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                className="border rounded px-2 py-1 w-36"
-              />
-            )}
-
-            <button
-              className={`px-3 py-2 rounded text-white ${points.length === 2 && selectionMode !== 'calibrate-plane' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                applyLengthCalibration();
-              }}
-              disabled={!(points.length === 2 && selectionMode !== 'calibrate-plane')}
-              title="写真上で基準物の両端を2点タップしてから適用"
-            >
-              適用（2点）
-            </button>
-
-            <button
-              className="px-3 py-2 rounded border border-gray-400 hover:bg-gray-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                resetLengthCalibration();
-              }}
-              title="等倍率校正を解除"
-            >
-              校正リセット
-            </button>
-          </div>
-
-          <div className="mt-2 text-sm text-gray-700">
-            <div>現在の点数: {points.length}</div>
-            <div>
-              {pxDistance != null
-                ? <>選択中の区間: {Math.round(pxDistance)} px</>
-                : <>2点をタップして区間を作成してください</>}
-            </div>
-            <div>
-              {currentMmPerPx
-                ? <>校正値: <b>{currentMmPerPx.toFixed(4)}</b> mm/px（2点距離はmm表示）</>
-                : <>未校正（2点法）: px表示</>}
-            </div>
-          </div>
+        {/* ===== 校正方法選択タブ ===== */}
+        <div className="mt-3 flex border-b border-gray-300">
+          <button
+            className={`px-4 py-2 text-sm font-medium ${
+              calibrationMode === 'length'
+                ? 'border-b-2 border-indigo-500 text-indigo-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setCalibrationMode('length');
+            }}
+          >
+            2点補正
+          </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium ${
+              calibrationMode === 'plane'
+                ? 'border-b-2 border-indigo-500 text-indigo-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setCalibrationMode('plane');
+            }}
+          >
+            4点補正
+          </button>
         </div>
+
+        {/* ===== 等倍率（2点）校正パネル ===== */}
+        {calibrationMode === 'length' && (
+          <div className="mt-3 p-3 rounded bg-white/80 border border-gray-300">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold">基準物で校正（2点）</span>
+              <select
+                className="border rounded px-2 py-1"
+                value={lenKey}
+                onChange={(e) => setLenKey(e.target.value as ReferenceKeyLength)}
+                onClick={(e) => e.stopPropagation()}
+                title="写真に写っている基準物を選択"
+              >
+                {LENGTH_PRESETS.map((r) => (
+                  <option key={r.key} value={r.key}>{r.label}</option>
+                ))}
+              </select>
+
+              {lenKey === 'customLength' && (
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  placeholder="基準の長さ(mm)"
+                  value={customMm}
+                  onChange={(e) => setCustomMm(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="border rounded px-2 py-1 w-36"
+                />
+              )}
+
+              <button
+                className={`px-3 py-2 rounded text-white ${points.length === 2 && selectionMode !== 'calibrate-plane' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  applyLengthCalibration();
+                }}
+                disabled={!(points.length === 2 && selectionMode !== 'calibrate-plane')}
+                title="写真上で基準物の両端を2点タップしてから適用"
+              >
+                適用（2点）
+              </button>
+
+              <button
+                className="px-3 py-2 rounded border border-gray-400 hover:bg-gray-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  resetLengthCalibration();
+                }}
+                title="等倍率校正を解除"
+              >
+                校正リセット
+              </button>
+            </div>
+
+            <div className="mt-2 text-sm text-gray-700">
+              <div>現在の点数: {points.length}</div>
+              <div>
+                {pxDistance != null
+                  ? <>選択中の区間: {Math.round(pxDistance)} px</>
+                  : <>2点をタップして区間を作成してください</>}
+              </div>
+              <div>
+                {currentMmPerPx
+                  ? <>校正値: <b>{currentMmPerPx.toFixed(4)}</b> mm/px（2点距離はmm表示）</>
+                  : <>未校正（2点法）: px表示</>}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ===== 平面補正（4点）パネル ===== */}
-        <div className="mt-3 p-3 rounded bg-white/80 border border-gray-300">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold">平面補正（4点・時計回り）</span>
+        {calibrationMode === 'plane' && (
+          <div className="mt-3 p-3 rounded bg-white/80 border border-gray-300">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold">平面補正（4点・時計回り）</span>
 
-            {selectionMode !== 'calibrate-plane' ? (
-              <button
-                className="px-3 py-2 rounded text-white bg-teal-600 hover:bg-teal-700"
-                onClick={(e) => { e.stopPropagation(); startPlaneCalibration(); }}
-                title="平面補正モードに入り、四隅を4点タップします"
+              {selectionMode !== 'calibrate-plane' ? (
+                <button
+                  className="px-3 py-2 rounded text-white bg-teal-600 hover:bg-teal-700"
+                  onClick={(e) => { e.stopPropagation(); startPlaneCalibration(); }}
+                  title="平面補正モードに入り、四隅を4点タップします"
+                >
+                  四角 → 平面補正モード開始
+                </button>
+              ) : (
+                <button
+                  className="px-3 py-2 rounded bg-gray-100 border hover:bg-gray-200"
+                  onClick={(e) => { e.stopPropagation(); cancelPlaneCalibration(); }}
+                  title="平面補正モードを終了（点はクリアされます）"
+                >
+                  平面補正モード終了
+                </button>
+              )}
+
+              <select
+                className="border rounded px-2 py-1"
+                value={rectKey}
+                onChange={(e) => setRectKey(e.target.value as ReferenceKeyRect)}
+                onClick={(e) => e.stopPropagation()}
+                title="写真に写っている矩形基準を選択"
               >
-                四角 → 平面補正モード開始
-              </button>
-            ) : (
+                {Object.entries(RECT_PRESETS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v ? v.label : '任意の矩形（mm指定）'}
+                  </option>
+                ))}
+              </select>
+
+              {rectKey === 'customRect' && (
+                <>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    placeholder="幅(mm)"
+                    value={customRectW}
+                    onChange={(e) => setCustomRectW(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="border rounded px-2 py-1 w-28"
+                  />
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    placeholder="高さ(mm)"
+                    value={customRectH}
+                    onChange={(e) => setCustomRectH(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="border rounded px-2 py-1 w-28"
+                  />
+                </>
+              )}
+
               <button
-                className="px-3 py-2 rounded bg-gray-100 border hover:bg-gray-200"
-                onClick={(e) => { e.stopPropagation(); cancelPlaneCalibration(); }}
-                title="平面補正モードを終了（点はクリアされます）"
+                className={`px-3 py-2 rounded text-white ${
+                  selectionMode === 'calibrate-plane' && points.length === 4
+                    ? 'bg-teal-700 hover:bg-teal-800'
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
+                onClick={(e) => { e.stopPropagation(); applyPlaneCalibration(); }}
+                disabled={!(selectionMode === 'calibrate-plane' && points.length === 4)}
+                title="四隅を4点タップ後に適用"
               >
-                平面補正モード終了
+                適用（平面補正）
               </button>
-            )}
 
-            <select
-              className="border rounded px-2 py-1"
-              value={rectKey}
-              onChange={(e) => setRectKey(e.target.value as ReferenceKeyRect)}
-              onClick={(e) => e.stopPropagation()}
-              title="写真に写っている矩形基準を選択"
-            >
-              {Object.entries(RECT_PRESETS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v ? v.label : '任意の矩形（mm指定）'}
-                </option>
-              ))}
-            </select>
-
-            {rectKey === 'customRect' && (
-              <>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  placeholder="幅(mm)"
-                  value={customRectW}
-                  onChange={(e) => setCustomRectW(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="border rounded px-2 py-1 w-28"
-                />
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  placeholder="高さ(mm)"
-                  value={customRectH}
-                  onChange={(e) => setCustomRectH(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="border rounded px-2 py-1 w-28"
-                />
-              </>
-            )}
-
-            <button
-              className={`px-3 py-2 rounded text-white ${
-                selectionMode === 'calibrate-plane' && points.length === 4
-                  ? 'bg-teal-700 hover:bg-teal-800'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
-              onClick={(e) => { e.stopPropagation(); applyPlaneCalibration(); }}
-              disabled={!(selectionMode === 'calibrate-plane' && points.length === 4)}
-              title="四隅を4点タップ後に適用"
-            >
-              適用（平面補正）
-            </button>
-
-            {homography && (
-              <span className="text-xs text-teal-700 ml-2">平面補正: ON</span>
-            )}
-          </div>
-
-          <div className="mt-2 text-sm text-gray-700">
-            <div>現在の点数: {points.length}（平面補正モード中は最大4点）</div>
-            <div className="text-gray-600">
-              点は時計回りで: 左上 → 右上 → 右下 → 左下 の順に選ぶと安定します。
+              {homography && (
+                <span className="text-xs text-teal-700 ml-2">平面補正: ON</span>
+              )}
             </div>
-            {calibMsg && <div className="mt-1 text-amber-700">{calibMsg}</div>}
+
+            <div className="mt-2 text-sm text-gray-700">
+              <div>現在の点数: {points.length}（平面補正モード中は最大4点）</div>
+              <div className="text-gray-600">
+                点は時計回りで: 左上 → 右上 → 右下 → 左下 の順に選ぶと安定します。
+              </div>
+              {calibMsg && <div className="mt-1 text-amber-700">{calibMsg}</div>}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
