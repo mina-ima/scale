@@ -597,9 +597,10 @@ const MeasurePage: React.FC = () => {
 
   // --- isArModeがtrueなら自動で開始 ---
   useEffect(() => {
-    const { isArMode } = useMeasureStore.getState();
-    if (isArMode && !xrSession) startARSession();
-  }, [xrSession, startARSession]);
+    if (isArMode && !xrSession) {
+      startARSession();
+    }
+  }, [isArMode, xrSession, startARSession]);
 
   // WebXR サポートの簡易可否（UIの有効/無効表示用）
   const isArSupported = typeof (navigator as any).xr !== 'undefined';
