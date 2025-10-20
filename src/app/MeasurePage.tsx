@@ -81,10 +81,7 @@ const MeasurePage: React.FC = () => {
       }
       // 写真計測時のガイダンス
       if (calibrationMode === 'plane') {
-        if (selectionMode === 'calibrate-plane') {
-          return `平面補正: 写真上で「基準矩形の四隅」を時計回りで${points.length}/4点タップしてください。`;
-        }
-        return '平面補正: 「平面補正モード開始」ボタンを押して、基準矩形の四隅をタップしてください。';
+        return `平面補正: 写真上で「基準矩形の四隅」を時計回りで${points.length}/4点タップしてください。`;
       }
       // calibrationMode === 'length'
       if (points.length < 2) {
