@@ -93,78 +93,7 @@ const { mockMediaStream } = vi.hoisted(() => {
 // Mock camera utilities
 const originalState = useMeasureStore.getState();
 
-interface MockMeasureUIProps {
-  onStartARSession: () => void;
-  onToggleCameraFacingMode: () => void;
-}
 
-// Mock MeasureUIComponent
-vi.mock('./MeasureUI', () => ({
-  __esModule: true,
-  default: function MockMeasureUI({
-    onToggleCameraFacingMode,
-  }: MockMeasureUIProps) {
-    const { measurement, unit, isWebXrSupported, isArMode, facingMode } =
-      useMeasureStore();
-    return (
-      <div data-testid="measure-ui-mock">
-        {measurement?.valueMm && (
-          <p data-testid="measurement-display">
-            {formatMeasurement(measurement.valueMm, unit)}
-          </p>
-        )}
-        {isWebXrSupported && !isArMode && (
-          <button data-testid="start-ar-button" onClick={mockStartARSession}>
-            AR計測を開始
-          </button>
-        )}
-        <button
-          data-testid="toggle-camera-button"
-          onClick={onToggleCameraFacingMode}
-        >
-          カメラ切り替え (
-          {facingMode === 'user' ? 'インカメラ' : 'アウトカメラ'})
-        </button>
-        <button
-          data-testid="reset-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            useMeasureStore.getState().clearPoints();
-          }}
-        >
-          リセット
-        </button>
-        <label>
-          <input
-            type="radio"
-            value="cm"
-            name="unit"
-            data-testid="unit-cm"
-            checked={unit === 'cm'}
-            onChange={() => useMeasureStore.getState().setUnit('cm')}
-          />{' '}
-          cm
-        </label>
-        <label>
-          <input
-            type="radio"
-            value="m"
-            name="unit"
-            data-testid="unit-m"
-            checked={unit === 'm'}
-            onChange={() => useMeasureStore.getState().setUnit('m')}
-          />{' '}
-          m
-        </label>
-        {!isWebXrSupported && (
-          <p data-testid="webxr-not-supported-message">
-            お使いの端末ではAR非対応です。写真で計測に切り替えます。
-          </p>
-        )}
-      </div>
-    );
-  },
-}));
 
 describe('MeasurePage', () => {
   let spy: MockInstance;

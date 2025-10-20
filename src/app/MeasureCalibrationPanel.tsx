@@ -377,4 +377,4 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
   return uiContent;
 };
 
-export default MeasureUIComponent;
+export default MeasureCalibrationPanel;
