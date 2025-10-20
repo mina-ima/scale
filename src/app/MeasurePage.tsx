@@ -60,9 +60,36 @@ const MeasurePage: React.FC = () => {
     homography,
   } = useMeasureStore();
 
-  console.log('MeasurePage: rendered', { isArMode, globalError });
-
   const { stream, error: cameraError, toggleCameraFacingMode } = useCamera();
+
+  const getInstructionText = useCallback(() => {
+    const { error, isArMode, isWebXrSupported, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points } = useMeasureStore.getState();
+    const isArSupported = typeof (navigator as any).xr !== 'undefined';
+
+    if (error) return `エラー: ${error.title} - ${error.message}`;
+    if (!isArMode) {
+      if (!isWebXrSupported || !isArSupported) {
+        return 'この端末/ブラウザはWebXR ARに非対応です。写真計測をご利用ください。';
+      }
+      // 写真計測時のガイダンス
+      if (calibrationMode === 'plane') {
+        if (selectionMode === 'calibrate-plane') {
+          return `平面補正: 写真上で「基準矩形の四隅」を時計回りで${points.length}/4点タップしてください。`;
+        }
+        return '平面補正: 「平面補正モード開始」ボタンを押して、基準矩形の四隅をタップしてください。';
+      }
+      // calibrationMode === 'length'
+      if (points.length < 2) {
+        return `2点補正: 写真上で「基準物の両端」を${points.length}/2点タップしてください。`;
+      }
+      return '2点補正: 基準物の長さを選択し、「適用」ボタンを押してください。';
+    }
+    if (arError) return `エラー: ${arError}`;
+    if (!isPlaneDetected) return 'AR: デバイスを動かして周囲の平面を検出してください。';
+    if (points3d.length === 0) return 'AR: 平面が検出されました。計測の始点をタップしてください。';
+    if (points3d.length === 1) return 'AR: 計測の終点をタップしてください。';
+    return null;
+  }, [globalError, isArMode, isWebXrSupported, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points]);
 
   // --- ユーティリティ: cover描画（歪みなく全面フィット・中央トリミング） ---
   const drawCover = useCallback(
