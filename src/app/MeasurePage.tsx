@@ -6,7 +6,9 @@ import { calculate3dDistance } from '../core/measure/calculate3dDistance';
 import { useCamera } from '../core/camera/useCamera';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
 import { isDistanceExceeded } from '../core/measure/maxDistanceGuard';
-import MeasureUIComponent from './MeasureUI';
+import MeasureTopPanel from './MeasureTopPanel';
+import MeasureControlButtons from './MeasureControlButtons';
+import MeasureCalibrationPanel from './MeasureCalibrationPanel';
 import { formatMeasurement } from '../core/measure/format';
 import {
   drawMeasurementLine,
@@ -589,13 +591,28 @@ const MeasurePage: React.FC = () => {
         />
       )}
 
-      <MeasureUIComponent
-        onStartARSession={startARSession}
-        onToggleCameraFacingMode={toggleCameraFacingMode}
-        onCapturePhoto={onCapturePhoto}
-        onPickPhoto={onPickPhoto}
-        isArSupported={isArSupported}
-      />
+      {/* UIコンポーネントの配置 */}
+      <div className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none flex flex-col justify-between">
+        <MeasureTopPanel getInstructionText={getInstructionText} />
+        <MeasureControlButtons
+          onStartARSession={startARSession}
+          onToggleCameraFacingMode={toggleCameraFacingMode}
+          onCapturePhoto={onCapturePhoto}
+          onPickPhoto={onPickPhoto}
+          isArSupported={isArSupported}
+        />
+        <MeasureCalibrationPanel
+          points={points}
+          selectionMode={selectionMode}
+          calibrationMode={calibrationMode}
+          homography={homography}
+          setSelectionMode={setSelectionMode}
+          setCalibrationMode={setCalibrationMode}
+          setHomography={setHomography}
+          setScaleMmPerPx={setScaleMmPerPx}
+          clearPoints={clearPoints}
+        />
+      </div>
 
       {/* 隠しファイル入力（写真選択用） */}
       <input
