@@ -44,18 +44,26 @@ const MeasurePage: React.FC = () => {
     addPoint,
     addPoint3d,
     clearPoints,
+    measurement,
     setMeasurement,
     unit,
     xrSession,
     setXrSession,
+    isPlaneDetected,
     setIsPlaneDetected,
+    arError,
     setArError,
+    isWebXrSupported,
     setIsWebXrSupported,
     setIsArMode,
     isArMode,
     setScaleMmPerPx, // 手動校正（mm/px）
-    // ★ 追加：平面補正（ホモグラフィ）をストアから取得
     homography,
+    selectionMode,
+    setSelectionMode,
+    calibrationMode,
+    setCalibrationMode,
+    setHomography,
   } = useMeasureStore();
 
   const setError = useMeasureStore((state) => state.setError);
@@ -64,11 +72,9 @@ const MeasurePage: React.FC = () => {
   const { stream, error: cameraError, toggleCameraFacingMode } = useCamera();
 
   const getInstructionText = useCallback(() => {
-    const { isArMode, points3d, calibrationMode, points, isWebXrSupported } = useMeasureStore.getState();
-    const { error, arError, isPlaneDetected, selectionMode } = useMeasureStore.getState(); // error, arError, isPlaneDetected, selectionModeを直接取得
     const isArSupported = typeof (navigator as any).xr !== 'undefined';
 
-    if (error) return `エラー: ${error.title} - ${error.message}`;
+    if (globalError) return `エラー: ${globalError.title} - ${globalError.message}`;
     if (!isArMode) {
       if (!isWebXrSupported || !isArSupported) {
         return 'この端末/ブラウザはWebXR ARに非対応です。写真計測をご利用ください。';
@@ -91,7 +97,17 @@ const MeasurePage: React.FC = () => {
     if (points3d.length === 0) return 'AR: 平面が検出されました。計測の始点をタップしてください。';
     if (points3d.length === 1) return 'AR: 計測の終点をタップしてください。';
     return null;
-  }, [isArMode, points3d, calibrationMode, points, isPlaneDetected]);
+  }, [
+    isArMode,
+    points3d,
+    calibrationMode,
+    points,
+    selectionMode,
+    globalError,
+    arError,
+    isPlaneDetected,
+    isWebXrSupported,
+  ]);
 
   // --- ユーティリティ: cover描画（歪みなく全面フィット・中央トリミング） ---
   const drawCover = useCallback(
@@ -366,7 +382,6 @@ const MeasurePage: React.FC = () => {
 
     // 測定線・ラベル
     if (points.length > 0) {
-      const { selectionMode } = useMeasureStore.getState();
       const isCalibrating = selectionMode === 'calibrate-plane';
       const markerColor = isCalibrating ? '#007FFF' : '#FF007F'; // 青 or ピンク
 
@@ -400,8 +415,6 @@ const MeasurePage: React.FC = () => {
           y: (points[0].y + points[1].y) / 2,
         };
 
-        const { measurement } = useMeasureStore.getState();
-
         if (measurement?.valueMm && measurement.unit) {
           const formatted = formatMeasurement(measurement.valueMm, measurement.unit);
           drawMeasurementLabel(ctx, formatted, labelPos.x, labelPos.y);
@@ -415,7 +428,7 @@ const MeasurePage: React.FC = () => {
         }
       }
     }
-  }, [points, xrSession]);
+  }, [points, xrSession, selectionMode, measurement]);
 
   // --- ARレンダーループ ---
   useEffect(() => {

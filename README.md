@@ -28,13 +28,20 @@ npm install -g pnpm
 pnpm install
 ```
 
-## 開発コマンド
+## 開発
 
 - **開発サーバーの起動:** `pnpm dev`
+
+## 品質チェック
+
 - **テストの実行:** `pnpm test`
 - **コードのフォーマット:** `pnpm format`
 - **Lintの実行:** `pnpm lint`
 - **型チェックの実行:** `pnpm typecheck`
+
+## ビルド
+
+- **プロダクションビルドの作成:** `pnpm build`
 
 ## テクノロジー
 
