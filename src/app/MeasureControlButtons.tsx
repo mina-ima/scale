@@ -38,7 +38,7 @@ const MeasureControlButtons: React.FC<MeasureControlButtonsProps> = ({
             disabled={!isWebXrSupported || !isArSupported}
             title={(!isWebXrSupported || !isArSupported) ? 'この端末ではWebXR ARを利用できません' : 'AR計測を開始'}
           >
-            AR計測を開始{(!isWebXrSupported || !isArSupported) ? '（未対応）' : ''}
+            AR計測を開始
           </button>
         )}
 
@@ -52,7 +52,7 @@ const MeasureControlButtons: React.FC<MeasureControlButtonsProps> = ({
             }}
             title="イン/アウトカメラを切り替え"
           >
-            カメラ切替（{facingMode === 'user' ? 'イン' : 'アウト'}）
+            カメラ切替
           </button>
         )}
 

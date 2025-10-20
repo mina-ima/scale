@@ -636,7 +636,7 @@ const MeasurePage: React.FC = () => {
 
       {/* UIコンポーネントの配置 */}
       <div className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none flex flex-col">
-        <MeasureTopPanel getInstructionText={getInstructionText} />
+
         <div className="flex-grow" />
         <div>
           <MeasureControlButtons
