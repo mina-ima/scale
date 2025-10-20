@@ -199,6 +199,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
             onClick={(e) => {
               e.stopPropagation();
               setCalibrationMode('plane');
+              startPlaneCalibration();
             }}
           >
             4点補正
@@ -282,15 +283,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
           <div className="mt-3">
             <div className="flex items-center gap-2 flex-wrap">
 
-              {selectionMode !== 'calibrate-plane' ? (
-                <button
-                  className="px-3 py-1.5 rounded text-white bg-teal-600 hover:bg-teal-700 text-sm"
-                  onClick={(e) => { e.stopPropagation(); startPlaneCalibration(); }}
-                  title="平面補正モードに入り、四隅を4点タップします"
-                >
-                  開始
-                </button>
-              ) : (
+              {selectionMode === 'calibrate-plane' && (
                 <button
                   className="px-3 py-1.5 rounded bg-gray-100 border hover:bg-gray-200 text-sm"
                   onClick={(e) => { e.stopPropagation(); cancelPlaneCalibration(); }}
