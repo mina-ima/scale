@@ -219,9 +219,9 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
     }
   };
 
-    const uiContent = (
+      const uiContent = (
 
-      <div className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none flex flex-col justify-between">
+        <div className="absolute top-0 left-0 w-full h-full z-20 flex flex-col justify-between">
 
         {/* 上部: 計測結果とガイド */}
 
@@ -799,12 +799,7 @@ const MeasureUIComponent: React.FC<MeasureUIProps> = ({
 
     );
 
-  const overlayRoot = document.getElementById('ar-overlay');
-  if (!overlayRoot) {
-    console.error('DOM element with id "ar-overlay" not found. UI will not be rendered.');
-    return null;
-  }
-  return createPortal(uiContent, overlayRoot);
+  return uiContent;
 };
 
 export default MeasureUIComponent;
