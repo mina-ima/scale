@@ -53,12 +53,13 @@ const MeasurePage: React.FC = () => {
     setIsWebXrSupported,
     setIsArMode,
     isArMode,
-    setError,
-    error: globalError,
     setScaleMmPerPx, // 手動校正（mm/px）
     // ★ 追加：平面補正（ホモグラフィ）をストアから取得
     homography,
   } = useMeasureStore();
+
+  const setError = useMeasureStore((state) => state.setError);
+  const globalError = useMeasureStore((state) => state.error);
 
   const { stream, error: cameraError, toggleCameraFacingMode } = useCamera();
 
