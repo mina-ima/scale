@@ -174,14 +174,14 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
 
   return (
     <div className="p-4 pointer-events-auto z-30"> {/* z-indexを高く設定 */}
-      <div className="bg-black/50 backdrop-blur p-4 rounded-lg shadow-lg">
-        {/* ===== 校正方法選択タブ ===== */}
-        <div className="flex border-b border-gray-300">
+      {/* ===== 校正方法選択タブ (パネルの外) ===== */}
+      <div className="flex justify-center mb-2">
+        <div className="bg-black/50 backdrop-blur rounded-lg shadow-lg flex">
           <button
-            className={`px-4 py-2 text-sm font-medium ${
+            className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
               calibrationMode === 'length'
-                ? 'border-b-2 border-indigo-500 text-indigo-600'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
             onClick={(e) => {
               e.stopPropagation();
@@ -191,10 +191,10 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
             2点補正
           </button>
           <button
-            className={`px-4 py-2 text-sm font-medium ${
+            className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
               calibrationMode === 'plane'
-                ? 'border-b-2 border-indigo-500 text-indigo-600'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
             }`}
             onClick={(e) => {
               e.stopPropagation();
@@ -204,12 +204,14 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
             4点補正
           </button>
         </div>
+      </div>
 
+      {/* ===== パネル本体 ===== */}
+      <div className="bg-black/50 backdrop-blur p-4 rounded-lg shadow-lg">
         {/* ===== 等倍率（2点）校正パネル ===== */}
         {calibrationMode === 'length' && (
           <div className="mt-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm">基準物（2点）</span>
               <select
                 className="border rounded px-2 py-1 text-sm"
                 value={lenKey}
@@ -279,7 +281,6 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
         {calibrationMode === 'plane' && (
           <div className="mt-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm">平面補正（4点）</span>
 
               {selectionMode !== 'calibrate-plane' ? (
                 <button
