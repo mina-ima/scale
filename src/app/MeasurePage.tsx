@@ -635,26 +635,29 @@ const MeasurePage: React.FC = () => {
       )}
 
       {/* UIコンポーネントの配置 */}
-      <div className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none flex flex-col justify-between">
+      <div className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none flex flex-col">
         <MeasureTopPanel getInstructionText={getInstructionText} />
-        <MeasureControlButtons
-          onStartARSession={startARSession}
-          onToggleCameraFacingMode={toggleCameraFacingMode}
-          onCapturePhoto={onCapturePhoto}
-          onPickPhoto={onPickPhoto}
-          isArSupported={isArSupported}
-        />
-        <MeasureCalibrationPanel
-          points={points}
-          selectionMode={selectionMode}
-          calibrationMode={calibrationMode}
-          homography={homography}
-          setSelectionMode={setSelectionMode}
-          setCalibrationMode={setCalibrationMode}
-          setHomography={setHomography}
-          setScaleMmPerPx={setScaleMmPerPx}
-          clearPoints={clearPoints}
-        />
+        <div className="flex-grow" />
+        <div>
+          <MeasureControlButtons
+            onStartARSession={startARSession}
+            onToggleCameraFacingMode={toggleCameraFacingMode}
+            onCapturePhoto={onCapturePhoto}
+            onPickPhoto={onPickPhoto}
+            isArSupported={isArSupported}
+          />
+          <MeasureCalibrationPanel
+            points={points}
+            selectionMode={selectionMode}
+            calibrationMode={calibrationMode}
+            homography={homography}
+            setSelectionMode={setSelectionMode}
+            setCalibrationMode={setCalibrationMode}
+            setHomography={setHomography}
+            setScaleMmPerPx={setScaleMmPerPx}
+            clearPoints={clearPoints}
+          />
+        </div>
       </div>
 
       {/* 隠しファイル入力（写真選択用） */}
