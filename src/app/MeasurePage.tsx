@@ -89,7 +89,7 @@ const MeasurePage: React.FC = () => {
     if (points3d.length === 0) return 'AR: 平面が検出されました。計測の始点をタップしてください。';
     if (points3d.length === 1) return 'AR: 計測の終点をタップしてください。';
     return null;
-  }, [error, isArMode, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points]);
+  }, [isArMode, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points]);
 
   // --- ユーティリティ: cover描画（歪みなく全面フィット・中央トリミング） ---
   const drawCover = useCallback(
