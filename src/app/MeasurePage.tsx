@@ -63,7 +63,7 @@ const MeasurePage: React.FC = () => {
   const { stream, error: cameraError, toggleCameraFacingMode } = useCamera();
 
   const getInstructionText = useCallback(() => {
-    const { error, isArMode, isWebXrSupported, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points } = useMeasureStore.getState();
+    const { error, isArMode, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points, isWebXrSupported } = useMeasureStore.getState();
     const isArSupported = typeof (navigator as any).xr !== 'undefined';
 
     if (error) return `エラー: ${error.title} - ${error.message}`;
@@ -89,7 +89,7 @@ const MeasurePage: React.FC = () => {
     if (points3d.length === 0) return 'AR: 平面が検出されました。計測の始点をタップしてください。';
     if (points3d.length === 1) return 'AR: 計測の終点をタップしてください。';
     return null;
-  }, [globalError, isArMode, isWebXrSupported, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points]);
+  }, [globalError, isArMode, arError, isPlaneDetected, points3d, selectionMode, calibrationMode, points]);
 
   // --- ユーティリティ: cover描画（歪みなく全面フィット・中央トリミング） ---
   const drawCover = useCallback(
