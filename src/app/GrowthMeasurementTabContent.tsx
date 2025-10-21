@@ -13,7 +13,7 @@ import {
 } from '../core/render/drawMeasurement';
 import { getCameraStream, stopCameraStream } from '../core/camera/utils';
 import { useCamera } from '../core/camera/useCamera'; // Add this import
-import { ItemKey } from '../utils/fileUtils'; // Import ItemKey
+import { ItemKey, generateFileName, saveImageToDevice } from '../utils/fileUtils'; // Import ItemKey and generateFileName, saveImageToDevice
 
 interface GrowthMeasurementTabContentProps {
   mode: ItemKey;

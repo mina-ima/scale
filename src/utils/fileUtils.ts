@@ -21,3 +21,56 @@ export const generateFileName = (
 
   return `hakattake_${formattedDate}_${itemKey}_${formattedValue}${unit}.jpg`;
 };
+
+export const saveImageToDevice = async (
+  blob: Blob,
+  fileName: string
+): Promise<void> => {
+  if (
+    'showSaveFilePicker' in window &&
+    typeof window.showSaveFilePicker === 'function'
+  ) {
+    try {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: '画像ファイル',
+            accept: { 'image/jpeg': ['.jpg', '.jpeg'] },
+          },
+        ],
+      });
+      const writableStream = await fileHandle.createWritable();
+      await writableStream.write(blob);
+      await writableStream.close();
+      console.log(`File '${fileName}' saved via File System Access API.`);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('File save aborted by user.');
+      } else {
+        console.error('Error saving file via File System Access API:', error);
+        // Fallback to download link if API fails for other reasons
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log(`File '${fileName}' downloaded via fallback.`);
+      }
+    }
+  } else {
+    // Fallback for browsers that do not support File System Access API
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    console.log(`File '${fileName}' downloaded via fallback.`);
+  }
+};
