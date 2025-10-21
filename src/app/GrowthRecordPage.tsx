@@ -128,15 +128,7 @@ const GrowthRecordPage: React.FC = () => {
 
   
 
-          <div className="absolute bottom-0 left-0 w-full bg-white shadow-lg p-2 z-50"> {/* z-indexを高く設定 */}
-
-  
-
-            <Tabs items={tabItems} onTabChange={setActiveTab} />
-
-  
-
-          </div>
+          
 
   
 
