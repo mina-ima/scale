@@ -35,9 +35,7 @@ const GrowthMeasurementTabContent: React.FC<
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isWebXrSupported, setIsWebXrSupported] = useState(false);
-  const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(
-    null
-  );
+  const photoCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [showToast, setShowToast] = useState(false); // Added for toast
   const [toastMessage, setToastMessage] = useState(''); // Added for toast
 
@@ -113,13 +111,8 @@ const GrowthMeasurementTabContent: React.FC<
       offscreenCanvas.height = video.videoHeight || 1;
       const offCtx = offscreenCanvas.getContext('2d');
       if (!offCtx) return;
-      drawCover(offCtx, video, video.videoWidth || 1, video.videoHeight || 1, video.videoWidth || 1, video.videoHeight || 1);
-
-      const img = new Image();
-      img.onload = () => {
-        setUploadedImage(img);
-      };
-      img.src = offscreenCanvas.toDataURL('image/jpeg');
+            drawCover(offscreenCanvas.getContext('2d')!, video, video.videoWidth || 1, video.videoHeight || 1, video.videoWidth || 1, video.videoHeight || 1);
+            photoCanvasRef.current = offscreenCanvas;
 
       clearPoints();
       setScaleMmPerPx(null);
@@ -241,21 +234,36 @@ const GrowthMeasurementTabContent: React.FC<
     [addPoint, clearPoints, points, scale, setMeasurement, unit, mode]
   );
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onPhotoSelected = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      clearPoints(); // Clear existing points when a new image is uploaded
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          setUploadedImage(img);
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      const displayCanvas = canvasRef.current;
+      if (!displayCanvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = displayCanvas.getBoundingClientRect();
+      const destW = Math.round(rect.width * dpr);
+      const destH = Math.round(rect.height * dpr);
+
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = destW;
+      offscreenCanvas.height = destH;
+      const offCtx = offscreenCanvas.getContext('2d');
+      if (!offCtx) return;
+      drawCover(offCtx, img, img.naturalWidth || img.width, img.naturalHeight || img.height, destW, destH);
+      photoCanvasRef.current = offscreenCanvas;
+
+      clearPoints();
+      setScaleMmPerPx(null);
+
+    };
+    img.onerror = () => {
+      setToastMessage('画像の読み込みに失敗しました');
+      setShowToast(true);
+    };
+    img.src = URL.createObjectURL(file);
+  }, [drawCover, clearPoints, setScaleMmPerPx]);
 
   const composeAndSaveImage = useCallback(async () => {
     console.log('composeAndSaveImage called');
@@ -375,40 +383,15 @@ const GrowthMeasurementTabContent: React.FC<
 
       context.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw video frame if available and no image uploaded
-      if (
-        videoRef.current &&
-        videoRef.current.readyState >= 2 &&
-        !uploadedImage
-      ) {
-        if (
-          canvas.width !== videoRef.current.videoWidth ||
-          canvas.height !== videoRef.current.videoHeight
-        ) {
-          canvas.width = videoRef.current.videoWidth;
-          canvas.height = videoRef.current.videoHeight;
+      // 背景（cover合成済み）を描画
+      if (photoCanvasRef.current) {
+        const bg = photoCanvasRef.current;
+        if (canvas.width !== bg.width || canvas.height !== bg.height) {
+          canvas.width = bg.width;
+          canvas.height = bg.height;
         }
-        context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      } else if (uploadedImage) {
-        const aspectRatio = uploadedImage.width / uploadedImage.height;
-        let drawWidth = canvas.width;
-        let drawHeight = canvas.width / aspectRatio;
-
-        if (drawHeight > canvas.height) {
-          drawHeight = canvas.height;
-          drawWidth = canvas.height * aspectRatio;
-        }
-
-        const xOffset = (canvas.width - drawWidth) / 2;
-        const yOffset = (canvas.height - drawHeight) / 2;
-
-        context.drawImage(
-          uploadedImage,
-          xOffset,
-          yOffset,
-          drawWidth,
-          drawHeight
-        );
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bg, 0, 0);
       } else if (process.env.NODE_ENV === 'test' && points.length > 0) {
         context.fillStyle = 'white';
         context.fillRect(0, 0, canvas.width, canvas.height);
@@ -436,7 +419,7 @@ const GrowthMeasurementTabContent: React.FC<
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [points, measurement, unit, uploadedImage, videoRef]);
+  }, [points, measurement, unit, photoCanvasRef, videoRef]);
 
   return (
     <div
@@ -476,7 +459,7 @@ const GrowthMeasurementTabContent: React.FC<
             onStartARSession={() => {}}
             onToggleCameraFacingMode={() => {}}
             onCapturePhoto={onCapturePhoto}
-            onPickPhoto={onPickPhoto}
+            onPickPhoto={() => fileInputRef.current?.click()}
             isArSupported={false}
           />
           <MeasureCalibrationPanel
