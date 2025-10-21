@@ -465,7 +465,8 @@ const GrowthMeasurementTabContent: React.FC<
       />
       <div className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none flex flex-col">
         <MeasureTopPanel
-          instructionText={getInstructionText(mode)}
+          getInstructionText={getInstructionText}
+          mode={mode}
           measurement={measurement}
           unit={unit}
           error={error}
