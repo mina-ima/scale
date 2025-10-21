@@ -64,6 +64,7 @@ const MeasurePage: React.FC = () => {
     calibrationMode,
     setCalibrationMode,
     setHomography,
+    setGetCanvasBlobFunction,
   } = useMeasureStore();
 
   const setError = useMeasureStore((state) => state.setError);
@@ -599,8 +600,25 @@ const MeasurePage: React.FC = () => {
     }
   }, [isArMode, xrSession, startARSession]);
 
-  // WebXR サポートの簡易可否（UIの有効/無効表示用）
-  const isArSupported = typeof (navigator as any).xr !== 'undefined';
+  // --- キャンバスのBlob取得関数をストアに登録 ---
+  useEffect(() => {
+    const getCanvasBlob = async (): Promise<Blob | null> => {
+      const canvas = canvas2dRef.current;
+      if (!canvas) return null;
+
+      return new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/jpeg', 0.92);
+      });
+    };
+
+    setGetCanvasBlobFunction(getCanvasBlob);
+
+    return () => {
+      setGetCanvasBlobFunction(null);
+    };
+  }, [setGetCanvasBlobFunction]);
 
   return (
     <div

@@ -104,6 +104,8 @@ export interface MeasureState {
   setArError: (error: string | null) => void;
   setIsWebXrSupported: (supported: boolean) => void;
   setCameraToggleRequested: (requested: boolean) => void;
+  getCanvasBlobFunction: (() => Promise<Blob | null>) | null;
+  setGetCanvasBlobFunction: (func: (() => Promise<Blob | null>) | null) => void;
 }
 
 export const useMeasureStore = create<MeasureState>((set) => ({
@@ -128,6 +130,8 @@ export const useMeasureStore = create<MeasureState>((set) => ({
 
   selectionMode: 'measure',
   calibrationMode: 'length', // 初期値は2点補正
+
+  getCanvasBlobFunction: null,
 
   setMeasureMode: (mode) => set({ measureMode: mode }),
 
@@ -196,6 +200,8 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   setIsWebXrSupported: (supported) => set({ isWebXrSupported: supported }),
 
   setCameraToggleRequested: (requested) => set({ cameraToggleRequested: requested }),
+
+  setGetCanvasBlobFunction: (func) => set({ getCanvasBlobFunction: func }),
 }));
 
 // Playwright テスト用に公開
