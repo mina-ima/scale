@@ -3,6 +3,7 @@ import MeasurePage from './MeasurePage';
 import { useMeasureStore, MeasureMode } from '../store/measureStore';
 import { generateFileName, saveImageToDevice } from '../utils/fileUtils';
 import { ItemKey } from '../utils/fileUtils';
+import Tabs from '../components/Tabs';
 
 interface GrowthMeasurementTabContentProps {
   mode: ItemKey;
