@@ -38,7 +38,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
 
   return (
     <div className="relative w-full h-screen">
-      <MeasurePage />
+      <MeasurePage mode={mode} />
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex space-x-2">
         <button
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"

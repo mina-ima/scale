@@ -20,7 +20,11 @@ import { createRenderLoop } from '../core/ar/renderLoopUtils';
 // ★ 追加：ホモグラフィ適用ユーティリティ
 import { applyHomography } from '../core/geometry/homography';
 
-const MeasurePage: React.FC = () => {
+interface MeasurePageProps {
+  mode?: MeasureMode; // GrowthMeasurementTabContentから渡されるモード
+}
+
+const MeasurePage: React.FC<MeasurePageProps> = ({ mode = 'furniture' }) => {
   const canvas2dRef = useRef<HTMLCanvasElement>(null);
   const canvasWebGLRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -323,7 +327,7 @@ const MeasurePage: React.FC = () => {
           ) {
             const distMm = Math.hypot(m0.x - m1.x, m0.y - m1.y);
             setMeasurement({
-              mode: 'furniture',
+              mode: mode,
               measurementMethod: 'fallback',
               valueMm: distMm,
               unit,
