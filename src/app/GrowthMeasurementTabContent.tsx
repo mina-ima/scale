@@ -490,58 +490,62 @@ const GrowthMeasurementTabContent: React.FC<
         >
           リセット
         </button>
-        <div className="flex space-x-2 mt-2">
-          <button
-            className={`px-4 py-2 rounded ${
-              selectionMode === 'select'
-                ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-                : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
-            }`}
-            onClick={() =>
-              setSelectionMode(selectionMode === 'select' ? 'none' : 'select')
-            }
-          >
-            {selectionMode === 'select' ? '補正モード終了' : '補正モード開始'}
-          </button>
-          <button
-            className={`px-4 py-2 rounded ${
-              calibrationMode === 'calibrating'
-                ? 'bg-purple-500 text-white hover:bg-purple-600'
-                : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
-            }`}
-            onClick={() =>
-              setCalibrationMode(
-                calibrationMode === 'calibrating' ? 'none' : 'calibrating'
-              )
-            }
-          >
-            {calibrationMode === 'calibrating'
-              ? 'キャリブレーション終了'
-              : 'キャリブレーション開始'}
-          </button>
+        <div className="mt-2 flex flex-col space-y-2">
+          <div className="flex space-x-2">
+            <button
+              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mr-2"
+              onClick={onCapturePhoto}
+            >
+              撮影
+            </button>
+            <button
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              写真を選択
+            </button>
+            <input
+              ref={fileInputRef}
+              id="photo-upload"
+              name="photo-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
+          </div>
+          <div className="flex space-x-2">
+            <button
+              className={`px-4 py-2 rounded ${
+                selectionMode === 'select'
+                  ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                  : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
+              }`}
+              onClick={() =>
+                setSelectionMode(selectionMode === 'select' ? 'none' : 'select')
+              }
+            >
+              {selectionMode === 'select' ? '補正モード終了' : '補正モード開始'}
+            </button>
+            <button
+              className={`px-4 py-2 rounded ${
+                calibrationMode === 'calibrating'
+                  ? 'bg-purple-500 text-white hover:bg-purple-600'
+                  : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
+              }`}
+              onClick={() =>
+                setCalibrationMode(
+                  calibrationMode === 'calibrating' ? 'none' : 'calibrating'
+                )
+              }
+            >
+              {calibrationMode === 'calibrating'
+                ? 'キャリブレーション終了'
+                : 'キャリブレーション開始'}
+            </button>
+          </div>
         </div>
-          <button
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mr-2"
-            onClick={onCapturePhoto}
-          >
-            撮影
-          </button>
-          <button
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            写真を選択
-          </button>
-          <input
-            ref={fileInputRef}
-            id="photo-upload"
-            name="photo-upload"
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleImageUpload}
-          />
-        </div>
+      </div>
       </div>
       {showToast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg">
