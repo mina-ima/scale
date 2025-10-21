@@ -12,6 +12,7 @@ import {
   drawMeasurementLabel,
 } from '../core/render/drawMeasurement';
 import { getCameraStream, stopCameraStream } from '../core/camera/utils';
+import { useCamera } from '../core/camera/useCamera'; // Add this import
 import { ItemKey } from '../utils/fileUtils'; // Import ItemKey
 
 interface GrowthMeasurementTabContentProps {
@@ -29,11 +30,11 @@ const GrowthMeasurementTabContent: React.FC<
 > = ({ mode, generateFileName }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isWebXrSupported, setIsWebXrSupported] = useState(true);
   const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(
     null
   );
-  const [cameraError, setCameraError] = useState<ErrorState | null>(null);
   const [showToast, setShowToast] = useState(false); // Added for toast
   const [toastMessage, setToastMessage] = useState(''); // Added for toast
 
@@ -46,64 +47,126 @@ const GrowthMeasurementTabContent: React.FC<
     setMeasurement,
     unit,
     setUnit,
+    // 追加する状態とアクション
+    error, // グローバルエラー
+    facingMode, // カメラ切り替え用
+    selectionMode, // 補正パネル用
+    calibrationMode, // 補正パネル用
+    homography, // 補正パネル用
+    setSelectionMode, // 補正パネル用
+    setCalibrationMode, // 補正パネル用
+    setHomography, // 補正パネル用
+    setScaleMmPerPx, // 補正パネル用
   } = useMeasureStore();
 
-  const saveImageToDevice = useCallback(
-    async (blob: Blob, fileName: string) => {
-      try {
-        // Try File System Access API first
-        if ('showSaveFilePicker' in window) {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: fileName,
-            types: [
-              {
-                description: 'JPEG Image',
-                accept: { 'image/jpeg': ['.jpg'] },
-              },
-            ],
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          console.log('Image saved using File System Access API');
-          setToastMessage('画像を保存しました！');
-          setShowToast(true);
-        } else {
-          // Fallback to download link
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          console.log('Image downloaded as fallback');
-          setToastMessage('画像をダウンロードしました！');
-          setShowToast(true);
-        }
-      } catch (error) {
-        console.error('Failed to save image:', error);
-        setToastMessage('画像の保存に失敗しました。');
-        setShowToast(true);
-      }
+  const { stream, error: cameraErrorFromHook, toggleCameraFacingMode } = useCamera();
+  const [cameraError, setCameraError] = useState<ErrorState | null>(null); // Keep this for local error state
+
+  // --- ユーティリティ: cover描画（歪みなく全面フィット・中央トリミング） ---
+  const drawCover = useCallback(
+    (
+      ctx: CanvasRenderingContext2D,
+      src: CanvasImageSource,
+      srcW: number,
+      srcH: number,
+      destW: number,
+      destH: number
+    ) => {
+      const scale = Math.max(destW / srcW, destH / srcH);
+      const drawW = srcW * scale;
+      const drawH = srcH * scale;
+      const dx = (destW - drawW) / 2;
+      const dy = (destH - drawH) / 2;
+      ctx.drawImage(src, dx, dy, drawW, drawH);
     },
-    [setToastMessage, setShowToast]
+    []
   );
 
-  const setupCamera = useCallback(async () => {
-    setCameraError(null); // Clear previous errors
-    const streamResult = await getCameraStream();
-    if (streamResult instanceof MediaStream) {
-      if (videoRef.current) {
-        videoRef.current.srcObject = streamResult;
-      }
-      return streamResult; // Return stream for cleanup
-    } else {
-      setCameraError(streamResult);
-      return null;
+  // --- 写真計測: 撮影（coverで合成して保存＆表示） ---
+  const onCapturePhoto = useCallback(() => {
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const destW = Math.round(rect.width * dpr);
+      const destH = Math.round(rect.height * dpr);
+
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = destW;
+      offscreenCanvas.height = destH;
+      const offCtx = offscreenCanvas.getContext('2d');
+      if (!offCtx) return;
+      drawCover(offCtx, video, video.videoWidth || 1, video.videoHeight || 1, destW, destH);
+
+      const img = new Image();
+      img.onload = () => {
+        setUploadedImage(img);
+      };
+      img.src = offscreenCanvas.toDataURL('image/jpeg');
+
+      clearPoints();
+      setScaleMmPerPx(null);
+
+    } catch (e) {
+      console.error('capturePhoto failed', e);
+      // setError('写真の取得に失敗しました'); // useMeasureStoreのsetErrorは使わない
+      setToastMessage('写真の取得に失敗しました');
+      setShowToast(true);
     }
-  }, [videoRef]);
+  }, [drawCover, clearPoints, setScaleMmPerPx]);
+
+  // --- 写真計測: 端末から選択 ---
+  const onPickPhoto = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  useEffect(() => {
+    if (cameraErrorFromHook) {
+      setCameraError(cameraErrorFromHook);
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (stream && (video as any).srcObject === stream) return;
+
+    if (stream) {
+      const oldStream = (video as any).srcObject as MediaStream | null;
+      if (oldStream && oldStream !== stream) {
+        oldStream.getTracks().forEach((t) => t.stop());
+      }
+      // @ts-expect-error - srcObject null/MediaStream 許容
+      video.srcObject = stream;
+
+      const playSafely = async () => {
+        try {
+          await video.play();
+        } catch (e: any) {
+          if (e?.name !== 'AbortError') {
+            console.error('Error playing video stream:', e);
+          }
+        }
+      };
+
+      if (video.readyState >= 2) {
+        playSafely();
+      } else {
+        const onCanPlay = () => {
+          video.removeEventListener('canplay', onCanPlay);
+          playSafely();
+        };
+        video.addEventListener('canplay', onCanPlay, { once: true });
+      }
+    } else if (!stream && (video as any).srcObject) {
+      video.pause();
+      // @ts-expect-error - null 許容
+      video.srcObject = null;
+    }
+  }, [stream, cameraErrorFromHook]);
 
   useEffect(() => {
     if (showToast) {
@@ -119,24 +182,14 @@ const GrowthMeasurementTabContent: React.FC<
     if (!navigator.xr) {
       setIsWebXrSupported(false);
     }
-
-    let currentStream: MediaStream | null = null;
-
-    setupCamera().then((stream) => {
-      currentStream = stream;
-    });
-
-    return () => {
-      stopCameraStream(currentStream);
-    };
-  }, [setupCamera]);
+  }, []);
 
   const handleCanvasClick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
       // In tests, the scale might not be set initially, but we proceed.
       if (!scale && process.env.NODE_ENV !== 'test') {
         console.warn('Scale is not set. Measurement will be inaccurate.');
-        // Optionally, show a message to the user.
+        // Optionally, show a message to the user.}
         return;
       }
 
@@ -437,24 +490,55 @@ const GrowthMeasurementTabContent: React.FC<
         >
           リセット
         </button>
-        <div className="mt-2">
-          <label
-            htmlFor="photo-upload"
-            className="block text-sm font-medium text-gray-700"
+        <div className="flex space-x-2 mt-2">
+          <button
+            className={`px-4 py-2 rounded ${
+              selectionMode === 'select'
+                ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
+            }`}
+            onClick={() =>
+              setSelectionMode(selectionMode === 'select' ? 'none' : 'select')
+            }
+          >
+            {selectionMode === 'select' ? '補正モード終了' : '補正モード開始'}
+          </button>
+          <button
+            className={`px-4 py-2 rounded ${
+              calibrationMode === 'calibrating'
+                ? 'bg-purple-500 text-white hover:bg-purple-600'
+                : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
+            }`}
+            onClick={() =>
+              setCalibrationMode(
+                calibrationMode === 'calibrating' ? 'none' : 'calibrating'
+              )
+            }
+          >
+            {calibrationMode === 'calibrating'
+              ? 'キャリブレーション終了'
+              : 'キャリブレーション開始'}
+          </button>
+        </div>
+          <button
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mr-2"
+            onClick={onCapturePhoto}
+          >
+            撮影
+          </button>
+          <button
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={() => fileInputRef.current?.click()}
           >
             写真を選択
-          </label>
+          </button>
           <input
+            ref={fileInputRef}
             id="photo-upload"
             name="photo-upload"
             type="file"
             accept="image/*"
-            className="mt-1 block w-full text-sm text-gray-500
-              file:mr-4 file:py-2 file:px-4
-              file:rounded-full file:border-0
-              file:text-sm file:font-semibold
-              file:bg-blue-50 file:text-blue-700
-              hover:file:bg-blue-100"
+            className="hidden"
             onChange={handleImageUpload}
           />
         </div>
