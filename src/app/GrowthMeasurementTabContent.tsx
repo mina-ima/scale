@@ -13,7 +13,10 @@ import {
 } from '../core/render/drawMeasurement';
 import { getCameraStream, stopCameraStream } from '../core/camera/utils';
 import { useCamera } from '../core/camera/useCamera'; // Add this import
-import { ItemKey, generateFileName, saveImageToDevice } from '../utils/fileUtils'; // Import ItemKey and generateFileName, saveImageToDevice
+import { generateFileName, saveImageToDevice } from '../utils/fileUtils'; // Import the util
+import MeasureControlButtons from './MeasureControlButtons';
+import MeasureCalibrationPanel from './MeasureCalibrationPanel';
+import MeasureTopPanel from './MeasureTopPanel';
 
 interface GrowthMeasurementTabContentProps {
   mode: ItemKey;
@@ -31,7 +34,7 @@ const GrowthMeasurementTabContent: React.FC<
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isWebXrSupported, setIsWebXrSupported] = useState(true);
+  const [isWebXrSupported, setIsWebXrSupported] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<HTMLImageElement | null>(
     null
   );
@@ -61,6 +64,22 @@ const GrowthMeasurementTabContent: React.FC<
 
   const { stream, error: cameraErrorFromHook, toggleCameraFacingMode } = useCamera();
   const [cameraError, setCameraError] = useState<ErrorState | null>(null); // Keep this for local error state
+
+  const getInstructionText = useCallback((currentMode: ItemKey) => {
+    if (error) return `エラー: ${error.title} - ${error.message}`;
+    if (!isWebXrSupported) {
+      return 'この端末/ブラウザはWebXR ARに非対応です。写真計測をご利用ください。';
+    }
+    // 写真計測時のガイダンス
+    if (calibrationMode === 'plane') {
+      return `平面補正: 写真上で「基準矩形の四隅」を時計回りで${points.length}/4点タップしてください。`;
+    }
+    // calibrationMode === 'length'
+    if (points.length < 2) {
+      return `2点補正: 写真上で「基準物の両端」を${points.length}/2点タップしてください。`;
+    }
+    return `2点補正: 基準物の長さを選択し、「適用」ボタンを押してください。 (モード: ${currentMode})`;
+  }, [error, isWebXrSupported, calibrationMode, points]);
 
   // --- ユーティリティ: cover描画（歪みなく全面フィット・中央トリミング） ---
   const drawCover = useCallback(
@@ -125,7 +144,9 @@ const GrowthMeasurementTabContent: React.FC<
 
   useEffect(() => {
     if (cameraErrorFromHook) {
-      setCameraError(cameraErrorFromHook);
+      // setError(cameraErrorFromHook); // useMeasureStoreのsetErrorは使わない
+      setToastMessage(`カメラエラー: ${cameraErrorFromHook.message}`);
+      setShowToast(true);
       return;
     }
 
@@ -442,110 +463,49 @@ const GrowthMeasurementTabContent: React.FC<
         width={window.innerWidth}
         height={window.innerHeight}
       />
-      <div className="absolute top-4 left-4 bg-white bg-opacity-75 p-2 rounded">
-        <h1 className="text-xl font-bold">成長記録モード ({mode})</h1>
-        {cameraError && cameraError.code === 'CAMERA_DENIED' ? (
-          <div className="text-red-500 text-sm mb-2">
-            <p>カメラへのアクセスが拒否されました。</p>
-            <p>ブラウザの設定でカメラアクセスを許可してください。</p>
-            <button
-              className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={setupCamera}
-            >
-              再試行
-            </button>
-          </div>
-        ) : cameraError ? (
-          <p className="text-red-500 text-sm mb-2">
-            カメラエラー: {cameraError.message}
-          </p>
-        ) : null}
-        {!isWebXrSupported && (
-          <p className="text-red-500 text-sm mb-2">
-            WebXR (AR) is not supported on this device.
-          </p>
-        )}
-        {measurement?.valueMm && (
-          <p className="text-lg">
-            {formatMeasurement(measurement.valueMm, unit)}
-          </p>
-        )}
-        <div className="flex space-x-2 mt-2">
-          <label className="inline-flex items-center">
-            <input
-              type="radio"
-              className="form-radio"
-              name="unit"
-              value="cm"
-              checked={unit === 'cm'}
-              onChange={() => setUnit('cm')}
-              disabled // Disable the radio button as it's always 'cm' for these modes
-            />
-            <span className="ml-2">cm</span>
-          </label>
-        </div>
-        <button
-          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-          onClick={clearPoints}
-        >
-          リセット
-        </button>
-        <div className="mt-2 flex flex-col space-y-2">
-          <div className="flex space-x-2">
-            <button
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mr-2"
-              onClick={onCapturePhoto}
-            >
-              撮影
-            </button>
-            <button
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              写真を選択
-            </button>
-            <input
-              ref={fileInputRef}
-              id="photo-upload"
-              name="photo-upload"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-            />
-          </div>
-          <div className="flex space-x-2">
-            <button
-              className={`px-4 py-2 rounded ${
-                selectionMode === 'select'
-                  ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-                  : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
-              }`}
-              onClick={() =>
-                setSelectionMode(selectionMode === 'select' ? 'none' : 'select')
-              }
-            >
-              {selectionMode === 'select' ? '補正モード終了' : '補正モード開始'}
-            </button>
-            <button
-              className={`px-4 py-2 rounded ${
-                calibrationMode === 'calibrating'
-                  ? 'bg-purple-500 text-white hover:bg-purple-600'
-                  : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
-              }`}
-              onClick={() =>
-                setCalibrationMode(
-                  calibrationMode === 'calibrating' ? 'none' : 'calibrating'
-                )
-              }
-            >
-              {calibrationMode === 'calibrating'
-                ? 'キャリブレーション終了'
-                : 'キャリブレーション開始'}
-            </button>
-          </div>
+      <div className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none flex flex-col">
+        <MeasureTopPanel
+          instructionText={getInstructionText(mode)}
+          measurement={measurement}
+          unit={unit}
+          error={error}
+          isArMode={false}
+          isWebXrSupported={isWebXrSupported}
+          isPlaneDetected={false}
+          arError={null}
+        />
+        <div className="flex-grow" />
+        <div>
+          <MeasureControlButtons
+            onStartARSession={() => {}}
+            onToggleCameraFacingMode={() => {}}
+            onCapturePhoto={onCapturePhoto}
+            onPickPhoto={onPickPhoto}
+            isArSupported={false}
+          />
+          <MeasureCalibrationPanel
+            points={points}
+            selectionMode={selectionMode}
+            calibrationMode={calibrationMode}
+            homography={homography}
+            setSelectionMode={setSelectionMode}
+            setCalibrationMode={setCalibrationMode}
+            setHomography={setHomography}
+            setScaleMmPerPx={setScaleMmPerPx}
+            clearPoints={clearPoints}
+          />
         </div>
       </div>
+
+      {/* 隠しファイル入力（写真選択用） */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleImageUpload}
+      />
       {showToast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg">
           {toastMessage}
