@@ -65,7 +65,7 @@ const GrowthRecordPage: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">成長記録モード</h1>
+
       <Tabs items={tabItems} />
       {showToast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg">
