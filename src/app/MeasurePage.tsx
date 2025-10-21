@@ -600,6 +600,9 @@ const MeasurePage: React.FC = () => {
     }
   }, [isArMode, xrSession, startARSession]);
 
+  // WebXR サポートの簡易可否（UIの有効/無効表示用）
+  const isArSupported = typeof (navigator as any).xr !== 'undefined';
+
   // --- キャンバスのBlob取得関数をストアに登録 ---
   useEffect(() => {
     const getCanvasBlob = async (): Promise<Blob | null> => {
