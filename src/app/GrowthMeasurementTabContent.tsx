@@ -14,8 +14,7 @@ import {
 import { getCameraStream, stopCameraStream } from '../core/camera/utils';
 import { useCamera } from '../core/camera/useCamera'; // Add this import
 import { generateFileName, saveImageToDevice } from '../utils/fileUtils'; // Import the util
-import MeasureControlButtons from './MeasureControlButtons';
-import MeasureCalibrationPanel from './MeasureCalibrationPanel';
+
 import MeasureTopPanel from './MeasureTopPanel';
 
 interface GrowthMeasurementTabContentProps {
@@ -423,24 +422,26 @@ const GrowthMeasurementTabContent: React.FC<
 
   return (
     <div
-      className="relative w-full h-screen"
       data-testid={`growth-record-page-container-${mode}`}
+      className="relative w-full h-screen"
+      onClick={handleCanvasClick}
     >
-      <video
-        ref={videoRef}
-        className="absolute top-0 left-0 w-full h-full object-cover"
-        autoPlay
-        muted
-        playsInline
-      />
+      {stream && (
+        <video
+          ref={videoRef}
+          className="absolute top-0 left-0 w-full h-full object-cover z-[-1]"
+          autoPlay
+          muted
+          playsInline
+        />
+      )}
       <canvas
         ref={canvasRef}
         data-testid={`growth-record-canvas-${mode}`}
-        className="absolute top-0 left-0 w-full h-full"
-        onClick={handleCanvasClick}
-        width={window.innerWidth}
-        height={window.innerHeight}
+        className="absolute top-0 left-0 w-full h-full z-0"
       />
+
+      {/* UIコンポーネントの配置 */}
       <div className="absolute top-0 left-0 w-full h-full z-20 pointer-events-none flex flex-col">
         <MeasureTopPanel
           getInstructionText={getInstructionText}
@@ -453,6 +454,14 @@ const GrowthMeasurementTabContent: React.FC<
           isPlaneDetected={false}
           arError={null}
         />
+        <div className="p-4 pointer-events-auto z-30">
+          <button
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={composeAndSaveImage}
+          >
+            画像を保存
+          </button>
+        </div>
         <div className="flex-grow" />
         <div>
           <MeasureControlButtons
