@@ -108,35 +108,63 @@ const GrowthRecordPage: React.FC = () => {
 
   
 
-    return (
+      return (
 
-      <div className="container mx-auto p-4 flex flex-col h-screen">
+  
 
-        <div className="flex-grow">
+        <div className="relative flex flex-col h-screen w-full">
 
-          {renderContent()}
+  
 
-        </div>
+          <div className="flex-grow overflow-auto pb-20"> {/* Tabsの高さ分padding-bottomを追加 */}
 
-        <div className="fixed bottom-0 left-0 w-full bg-white shadow-lg p-2">
+  
 
-          <Tabs items={tabItems} onTabChange={setActiveTab} />
+            {renderContent()}
 
-        </div>
-
-        {showToast && (
-
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg">
-
-            {toastMessage}
+  
 
           </div>
 
-        )}
+  
 
-      </div>
+          <div className="absolute bottom-0 left-0 w-full bg-white shadow-lg p-2 z-50"> {/* z-indexを高く設定 */}
 
-    );
+  
+
+            <Tabs items={tabItems} onTabChange={setActiveTab} />
+
+  
+
+          </div>
+
+  
+
+          {showToast && (
+
+  
+
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg z-50">
+
+  
+
+              {toastMessage}
+
+  
+
+            </div>
+
+  
+
+          )}
+
+  
+
+        </div>
+
+  
+
+      );
 
   };
 
