@@ -108,17 +108,12 @@ const GrowthMeasurementTabContent: React.FC<
       const canvas = canvasRef.current;
       if (!video || !canvas) return;
 
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      const destW = Math.round(rect.width * dpr);
-      const destH = Math.round(rect.height * dpr);
-
       const offscreenCanvas = document.createElement('canvas');
-      offscreenCanvas.width = destW;
-      offscreenCanvas.height = destH;
+      offscreenCanvas.width = video.videoWidth || 1;
+      offscreenCanvas.height = video.videoHeight || 1;
       const offCtx = offscreenCanvas.getContext('2d');
       if (!offCtx) return;
-      drawCover(offCtx, video, video.videoWidth || 1, video.videoHeight || 1, destW, destH);
+      drawCover(offCtx, video, video.videoWidth || 1, video.videoHeight || 1, video.videoWidth || 1, video.videoHeight || 1);
 
       const img = new Image();
       img.onload = () => {
