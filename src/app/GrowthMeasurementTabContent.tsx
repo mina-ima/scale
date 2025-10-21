@@ -10,7 +10,7 @@ interface GrowthMeasurementTabContentProps {
 }
 
 const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = ({ mode }) => {
-  const { measurement, points, getCanvasBlobFunction } = useMeasureStore();
+  const { measurement, points, getCanvasBlobFunction, homography } = useMeasureStore();
 
   const composeAndSaveImage = useCallback(async (saveMode: ItemKey) => {
     console.log('composeAndSaveImage called in GrowthMeasurementTabContent');
