@@ -12,6 +12,7 @@ interface TabsProps {
 }
 
 const Tabs: React.FC<TabsProps> = ({ items, initialActiveTabId }) => {
+  console.log('Tabs component received items:', items);
   const [activeTabId, setActiveTabId] = useState(
     initialActiveTabId || items[0]?.id
   );

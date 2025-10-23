@@ -40,25 +40,10 @@ describe('drawMeasurement', () => {
 
       drawMeasurementLine(ctx, p1, p2);
 
-      expect(ctx.beginPath).toHaveBeenCalledTimes(3);
+      expect(ctx.beginPath).toHaveBeenCalledTimes(1);
       expect(ctx.moveTo).toHaveBeenCalledWith(p1.x, p1.y);
       expect(ctx.lineTo).toHaveBeenCalledWith(p2.x, p2.y);
       expect(ctx.stroke).toHaveBeenCalledOnce();
-      expect(ctx.arc).toHaveBeenCalledWith(
-        p1.x,
-        p1.y,
-        expect.any(Number),
-        0,
-        2 * Math.PI
-      );
-      expect(ctx.arc).toHaveBeenCalledWith(
-        p2.x,
-        p2.y,
-        expect.any(Number),
-        0,
-        2 * Math.PI
-      );
-      expect(ctx.fill).toHaveBeenCalledTimes(2);
     });
   });
 

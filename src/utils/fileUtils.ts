@@ -19,22 +19,7 @@ export const generateFileName = (
   const formattedDate = `${year}-${month}-${day}`;
   const formattedValue = value.toFixed(1);
 
-  let prefix = '';
-  switch (itemKey) {
-    case 'shinchou':
-      prefix = 'height';
-      break;
-    case 'te':
-      prefix = 'hand';
-      break;
-    case 'ashi':
-      prefix = 'foot';
-      break;
-    default:
-      prefix = itemKey;
-  }
-
-  return `hakattake_${formattedDate}_${prefix}_${formattedValue}${unit}.jpg`;
+  return `hakattake_${formattedDate}_${itemKey}_${formattedValue}${unit}.jpg`;
 };
 
 export const saveImageToDevice = async (

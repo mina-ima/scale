@@ -7,8 +7,18 @@ import { ErrorBoundary } from './app/ErrorBoundary'; // ← 追加
 const MeasurePage = lazy(() => import('./app/MeasurePage'));
 const GrowthRecordPage = lazy(() => import('./app/GrowthRecordPage'));
 
+import { cv } from 'opencv-ts';
+
 function App() {
-  const { setScale } = useMeasureStore();
+  const { setScale, setIsCvReady } = useMeasureStore();
+
+  useEffect(() => {
+    // OpenCV.jsの初期化
+    cv.onRuntimeInitialized = () => {
+      console.log('OpenCV.js is ready.');
+      setIsCvReady(true);
+    };
+  }, [setIsCvReady]);
 
   useEffect(() => {
     if (window.isPlaywrightTest) {

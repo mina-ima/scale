@@ -17,6 +17,11 @@ import {
 } from '../core/render/drawMeasurement';
 import { createRenderLoop } from '../core/ar/renderLoopUtils';
 
+import { cv } from 'opencv-ts';
+import { detectShapes } from '../core/reference/ShapeDetection';
+import { estimateScale } from '../core/reference/ScaleEstimation';
+import { referenceTable } from '../core/reference/referenceTable';
+
 // ★ 追加：ホモグラフィ適用ユーティリティ
 import { applyHomography } from '../core/geometry/homography';
 
@@ -37,6 +42,7 @@ const MeasurePage: React.FC<MeasurePageProps> = ({ mode = 'furniture' }) => {
   const lineRef = useRef<THREE.Line | null>(null);
   const reticleRef = useRef<THREE.Mesh | null>(null);
   const [isTapping, setIsTapping] = useState(false);
+  const [scaleConfirmation, setScaleConfirmation] = useState<ScaleEstimation | null>(null);
 
   // 撮影/選択した「表示用画像」を保持（displayCanvasと同じ内部サイズで合成済み）
   const photoCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -69,6 +75,8 @@ const MeasurePage: React.FC<MeasurePageProps> = ({ mode = 'furniture' }) => {
     setCalibrationMode,
     setHomography,
     setGetCanvasBlobFunction,
+    isCvReady,
+    setScale,
   } = useMeasureStore();
 
   const setError = useMeasureStore((state) => state.setError);
@@ -162,9 +170,9 @@ const MeasurePage: React.FC<MeasurePageProps> = ({ mode = 'furniture' }) => {
       video.srcObject = stream;
 
       // Safari対策：canplay/loadedmetadata後に再生
-      const playSafely = async () => {
+      const playSafely = () => {
         try {
-          await video.play();
+          video.play();
           console.log('MeasurePage: Video stream started successfully.');
         } catch (e: any) {
           if (e?.name !== 'AbortError') {
@@ -232,40 +240,80 @@ const MeasurePage: React.FC<MeasurePageProps> = ({ mode = 'furniture' }) => {
     fileInputRef.current?.click();
   }, []);
 
-  const onPhotoSelected = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const img = new Image();
-    img.onload = () => {
-      const displayCanvas = canvas2dRef.current;
-      if (!displayCanvas) return;
-      const dpr = window.devicePixelRatio || 1;
-      const rect = displayCanvas.getBoundingClientRect();
-      const destW = Math.round(rect.width * dpr);
-      const destH = Math.round(rect.height * dpr);
+  const onPhotoSelected = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        const displayCanvas = canvas2dRef.current;
+        if (!displayCanvas) return;
+        const dpr = window.devicePixelRatio || 1;
+        const rect = displayCanvas.getBoundingClientRect();
+        const destW = Math.round(rect.width * dpr);
+        const destH = Math.round(rect.height * dpr);
 
-      const off = document.createElement('canvas');
-      off.width = destW;
-      off.height = destH;
-      const offCtx = off.getContext('2d');
-      if (!offCtx) return;
-      drawCover(offCtx, img, img.naturalWidth || img.width, img.naturalHeight || img.height, destW, destH);
-      photoCanvasRef.current = off;
+        const off = document.createElement('canvas');
+        off.width = destW;
+        off.height = destH;
+        const offCtx = off.getContext('2d');
+        if (!offCtx) return;
+        drawCover(offCtx, img, img.naturalWidth || img.width, img.naturalHeight || img.height, destW, destH);
+        photoCanvasRef.current = off;
 
-      displayCanvas.width = destW;
-      displayCanvas.height = destH;
-      const ctx = displayCanvas.getContext('2d');
-      ctx?.drawImage(off, 0, 0);
+        displayCanvas.width = destW;
+        displayCanvas.height = destH;
+        const ctx = displayCanvas.getContext('2d');
+        ctx?.drawImage(off, 0, 0);
 
-      clearPoints();
-      setScaleMmPerPx(null);
+        // --- OpenCV --- 
+        if (!isCvReady) {
+          console.warn('OpenCV is not ready yet.');
+          return;
+        }
+        try {
+          const mat = cv.imread(img);
+          const detectedRectangles = detectShapes(mat);
+          console.log('Detected Rectangles:', detectedRectangles);
 
-      setIsArMode(false);
-      setError(null);
-    };
-    img.onerror = () => setError('画像の読み込みに失敗しました');
-    img.src = URL.createObjectURL(file);
-  }, [setIsArMode, setError, drawCover, clearPoints, setScaleMmPerPx]);
+          const scaleEstimation = estimateScale(detectedRectangles.rectangles, referenceTable);
+          console.log('Scale Estimation:', scaleEstimation);
+
+          if (scaleEstimation.confidence > 0.7) { // 信頼度が70%以上なら確認を促す
+            setScaleConfirmation(scaleEstimation);
+          } else {
+            setScaleConfirmation(null);
+            setScale(null); // 信頼度が低い場合はスケールをリセット
+          }
+
+          mat.delete();
+        } catch (error) {
+          console.error('Error in shape detection:', error);
+          setError({
+            title: '形状検出エラー',
+            message: '写真から参照オブジェクトを検出できませんでした。',
+            code: 'UNKNOWN',
+            name: 'ShapeDetectionError',
+          });
+        }
+        // --- OpenCV --- 
+
+        clearPoints();
+        // setScaleMmPerPx(null); // estimateScaleでセットするので不要
+
+        setIsArMode(false);
+        setError(null);
+      };
+      img.onerror = () => setError({
+        title: '画像読込エラー',
+        message: '画像の読み込みに失敗しました。',
+        code: 'UNKNOWN',
+        name: 'ImageLoadError',
+      });
+      img.src = URL.createObjectURL(file);
+    },
+    [isCvReady, setIsArMode, setError, drawCover, clearPoints, setScale, setScaleConfirmation]
+  );
 
   // --- クリック処理（CSS座標→キャンバス座標へ変換） ---
   const handleCanvasClick = useCallback(
@@ -685,11 +733,44 @@ const MeasurePage: React.FC<MeasurePageProps> = ({ mode = 'furniture' }) => {
       {/* 隠しファイル入力（写真選択用） */}
       <input
         ref={fileInputRef}
+        data-testid="hidden-file-input" // for testing
         type="file"
         accept="image/*"
         className="hidden"
         onChange={onPhotoSelected}
       />
+
+      {scaleConfirmation && (
+        <div role="dialog" aria-modal="true" className="absolute inset-0 bg-black/50 flex items-center justify-center z-50 pointer-events-auto">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-medium text-gray-900">スケールの確認</h3>
+            <div className="mt-2 text-sm text-gray-600">
+              <p>
+                「{scaleConfirmation.matchedReferenceObject?.name}」を基準にスケールを補正しますか？ (信頼度: {Math.round(scaleConfirmation.confidence * 100)}%)
+              </p>
+            </div>
+            <div className="mt-4 flex justify-end space-x-2">
+              <button
+                type="button"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                onClick={() => setScaleConfirmation(null)}
+              >
+                いいえ
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                onClick={() => {
+                  setScale(scaleConfirmation);
+                  setScaleConfirmation(null);
+                }}
+              >
+                はい
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

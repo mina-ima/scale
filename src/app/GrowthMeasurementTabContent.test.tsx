@@ -1,117 +1,28 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import GrowthMeasurementTabContent from './GrowthMeasurementTabContent';
-import { useMeasureStore, MeasureState } from '../store/measureStore';
+import { useMeasureStore } from '../store/measureStore';
 import * as fallbackUtils from '../core/fallback/utils';
 import * as measureUtils from '../core/measure/calculate2dDistance';
 
 const mockGenerateFileName = vi.fn();
 
-const mockAddPoint = vi.fn();
-const mockClearPoints = vi.fn();
-const mockSetMeasurement = vi.fn();
-const mockSetUnit = vi.fn();
-
-let mockMeasureStoreValue: MeasureState = {
-  points: [],
-  measurement: null,
-  scale: {
-    mmPerPx: 1,
-    confidence: 1,
-    matchedReferenceObject: null,
-    matchedDetectedRectangle: null,
-  },
-  unit: 'cm',
-  addPoint: mockAddPoint,
-  clearPoints: mockClearPoints,
-  setMeasurement: mockSetMeasurement,
-  setUnit: mockSetUnit,
-  measureMode: 'growth-height',
-  error: null,
-  points3d: [],
-  setMeasureMode: vi.fn(),
-  setScale: vi.fn(),
-  setError: vi.fn(),
-  addPoint3d: vi.fn(),
-  setIsArMode: vi.fn(),
-  setXrSession: vi.fn(),
-  setIsPlaneDetected: vi.fn(),
-  setArError: vi.fn(),
-  setIsWebXrSupported: vi.fn(),
-  setCameraToggleRequested: vi.fn(),
-  isArMode: false,
-  xrSession: null,
-  isPlaneDetected: false,
-  arError: null,
-  isWebXrSupported: false,
-  cameraToggleRequested: false,
-  facingMode: 'environment',
-};
-
-// Mock the zustand store
-vi.mock('../store/measureStore', () => ({
-  useMeasureStore: vi.fn((selector) => selector(mockMeasureStoreValue)),
-}));
-
+// Mock the modules that are not relevant to the component's logic
 vi.mock('../core/fallback/utils');
 vi.mock('../core/measure/calculate2dDistance');
 
 describe('GrowthMeasurementTabContent', () => {
+  const originalState = useMeasureStore.getState();
+
   beforeEach(() => {
-    vi.clearAllMocks();
-
-    mockMeasureStoreValue = {
-      points: [],
-      measurement: null,
-      scale: {
-        mmPerPx: 1,
-        confidence: 1,
-        matchedReferenceObject: null,
-        matchedDetectedRectangle: null,
-      },
-      unit: 'cm',
-      addPoint: mockAddPoint,
-      clearPoints: mockClearPoints,
-      setMeasurement: mockSetMeasurement,
-      setUnit: mockSetUnit,
-      measureMode: 'growth-height',
-      error: null,
-      points3d: [],
-      setMeasureMode: vi.fn(),
-      setScale: vi.fn(),
-      setError: vi.fn(),
-      addPoint3d: vi.fn(),
-      setIsArMode: vi.fn(),
-      setXrSession: vi.fn(),
-      setIsPlaneDetected: vi.fn(),
-      setArError: vi.fn(),
-      setIsWebXrSupported: vi.fn(),
-      setCameraToggleRequested: vi.fn(),
-      isArMode: false,
-      xrSession: null,
-      isPlaneDetected: false,
-      arError: null,
-      isWebXrSupported: false,
-      cameraToggleRequested: false,
-      facingMode: 'environment',
-    };
-
-    vi.mocked(useMeasureStore).mockReturnValue(mockMeasureStoreValue);
-
-    vi.mocked(fallbackUtils.getTapCoordinates).mockReturnValue({
-      x: 10,
-      y: 10,
+    // Reset the store to its initial state before each test
+    act(() => {
+      useMeasureStore.setState(originalState, true);
     });
-    vi.mocked(measureUtils.calculate2dDistance).mockReturnValue(100);
 
-    // Mock HTMLCanvasElement.prototype.getContext
-    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
-      clearRect: vi.fn(),
-      drawImage: vi.fn(),
-      fillRect: vi.fn(),
-      fillText: vi.fn(),
-      // Mock other context methods as needed
-    })) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    // Mock implementations
+    vi.mocked(fallbackUtils.getTapCoordinates).mockReturnValue({ x: 10, y: 10 });
+    vi.mocked(measureUtils.calculate2dDistance).mockReturnValue(100);
 
     // Mock HTMLVideoElement.prototype.play
     HTMLVideoElement.prototype.play = vi.fn();
@@ -137,8 +48,20 @@ describe('GrowthMeasurementTabContent', () => {
     });
   });
 
-  it('calculates and sets measurement after two taps', () => {
-    mockMeasureStoreValue.points = [{ x: 0, y: 0 }]; // First point already added
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calculates and sets measurement after two taps', async () => {
+    const addPointSpy = vi.spyOn(useMeasureStore.getState(), 'addPoint');
+    const setMeasurementSpy = vi.spyOn(useMeasureStore.getState(), 'setMeasurement');
+
+    act(() => {
+      useMeasureStore.setState({ 
+        points: [{ x: 0, y: 0 }],
+        scale: { mmPerPx: 1, confidence: 1, matchedReferenceObject: null, matchedDetectedRectangle: null },
+      });
+    });
 
     render(
       <GrowthMeasurementTabContent
@@ -148,51 +71,53 @@ describe('GrowthMeasurementTabContent', () => {
     );
 
     const canvas = screen.getByTestId('growth-record-canvas-shinchou');
-    fireEvent.click(canvas); // Simulate second tap
+    fireEvent.click(canvas, { clientX: 10, clientY: 10 }); // Simulate second tap
 
-    expect(mockAddPoint).toHaveBeenCalledTimes(1); // First tap adds a point
-    expect(mockClearPoints).not.toHaveBeenCalled(); // Should not clear yet
+    expect(addPointSpy).toHaveBeenCalledTimes(1);
     expect(measureUtils.calculate2dDistance).toHaveBeenCalledWith(
       { x: 0, y: 0 },
-      { x: 10, y: 10 },
-      1 // Expecting mmPerPx, not the full scale object
+      { x: 10, y: 10 }
     );
-    expect(mockSetMeasurement).toHaveBeenCalledWith({
-      mode: 'growth-shinchou',
-      measurementMethod: 'fallback',
+    expect(setMeasurementSpy).toHaveBeenCalledWith({
       valueMm: 100,
-      unit: 'cm',
+      valueCm: 10,
       dateISO: expect.any(String),
     });
   });
 
-  it('clears points and adds new one on third tap', () => {
-    mockMeasureStoreValue.points = [
-      { x: 0, y: 0 },
-      { x: 10, y: 10 },
-    ]; // Two points already added
-    mockMeasureStoreValue.measurement = {
-      mode: 'growth-height',
-      measurementMethod: 'fallback',
-      valueMm: 100,
-      unit: 'cm',
-      dateISO: '2023-01-01',
-    }; // Add mode
+  it('clears points and adds new one on third tap', async () => {
+    const clearPointsSpy = vi.spyOn(useMeasureStore.getState(), 'clearPoints');
+    const addPointSpy = vi.spyOn(useMeasureStore.getState(), 'addPoint');
+    const setMeasurementSpy = vi.spyOn(useMeasureStore.getState(), 'setMeasurement');
+
+    act(() => {
+      useMeasureStore.setState({
+        points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+        measurement: {
+          valueMm: 100,
+          valueCm: 10,
+          dateISO: '2023-01-01',
+        },
+      });
+    });
 
     render(
       <GrowthMeasurementTabContent
         mode="shinchou"
-        generateFileName={mockGenerateFileName}
       />
     );
 
-    const canvas = screen.getByTestId('growth-record-canvas-shinchou');
-    fireEvent.click(canvas); // Simulate third tap
+    // calculate2dDistance is called once when the second point is added (before this test's act block)
+    expect(measureUtils.calculate2dDistance).toHaveBeenCalledTimes(1);
+    vi.clearAllMocks(); // Clear previous calls to focus on the third tap's effect
 
-    expect(mockClearPoints).toHaveBeenCalledTimes(1);
-    expect(mockAddPoint).toHaveBeenCalledTimes(1);
-    expect(mockAddPoint).toHaveBeenCalledWith({ x: 10, y: 10 });
-    expect(measureUtils.calculate2dDistance).not.toHaveBeenCalled(); // Should not calculate on third tap
-    expect(mockSetMeasurement).not.toHaveBeenCalled(); // Should not set measurement on third tap
+    const canvas = screen.getByTestId('growth-record-canvas-shinchou');
+    fireEvent.click(canvas, { clientX: 20, clientY: 20 }); // Simulate third tap
+
+    expect(clearPointsSpy).toHaveBeenCalledTimes(1);
+    expect(addPointSpy).toHaveBeenCalledTimes(1);
+    expect(addPointSpy).toHaveBeenCalledWith({ x: 20, y: 20 });
+    expect(measureUtils.calculate2dDistance).not.toHaveBeenCalled(); // Should not be called again after clearing and adding one point
+    expect(setMeasurementSpy).not.toHaveBeenCalled(); // setMeasurement is called by useEffect when points.length is 2, but not after clearPoints or addPoint(1)
   });
 });

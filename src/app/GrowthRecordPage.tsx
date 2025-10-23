@@ -2,162 +2,59 @@ import React, { useState, useEffect } from 'react';
 import Tabs from '../components/Tabs';
 import WeightInputForm from '../components/WeightInputForm';
 import GrowthMeasurementTabContent from './GrowthMeasurementTabContent';
-import { generateFileName } from '../utils/fileUtils'; // Import the util
+import { generateFileName, saveImageToDevice } from '../utils/fileUtils'; // Import the util
+
+const tabItems = [
+  {
+    id: 'shinchou',
+    label: '身長',
+    content: <GrowthMeasurementTabContent mode="shinchou" />,
+  },
+  {
+    id: 'ashi',
+    label: '足',
+    content: <GrowthMeasurementTabContent mode="ashi" />,
+  },
+  {
+    id: 'te',
+    label: '手',
+    content: <GrowthMeasurementTabContent mode="te" />,
+  },
+  {
+    id: 'weight',
+    label: '体重',
+    content: (
+      <WeightInputForm
+        onSubmit={(weight) => {
+          // setToastMessage(`体重 ${weight} kg を記録しました。`);
+          // setShowToast(true);
+        }}
+      />
+    ),
+  },
+];
 
 const GrowthRecordPage: React.FC = () => {
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-
-  useEffect(() => {
-    if (showToast) {
-      const timer = setTimeout(() => {
-        setShowToast(false);
-        setToastMessage('');
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [showToast]);
-
-    const [activeTab, setActiveTab] = useState('shinchou');
-
-  
-
-    const tabItems = [
-
-      {
-
-        id: 'shinchou',
-
-        label: '身長',
-
-      },
-
-      {
-
-        id: 'ashi',
-
-        label: '足',
-
-      },
-
-      {
-
-        id: 'te',
-
-        label: '手',
-
-      },
-
-      {
-
-        id: 'weight',
-
-        label: '体重',
-
-      },
-
-    ];
-
-  
-
-    const renderContent = () => {
-
-      switch (activeTab) {
-
-        case 'shinchou':
-
-        case 'ashi':
-
-        case 'te':
-
-          return (
-
-            <GrowthMeasurementTabContent
-
-              mode={activeTab as ItemKey}
-
-            />
-
-          );
-
-        case 'weight':
-
-          return (
-
-            <WeightInputForm
-
-              onSubmit={(weight) => {
-
-                setToastMessage(`体重 ${weight} kg を記録しました。`);
-
-                setShowToast(true);
-
-              }}
-
-            />
-
-          );
-
-        default:
-
-          return null;
-
-      }
-
-    };
-
-  
-
-      return (
-
-  
-
-        <div className="relative flex flex-col h-screen w-full">
-
-  
-
-          <div className="flex-grow overflow-auto pb-20"> {/* Tabsの高さ分padding-bottomを追加 */}
-
-  
-
-            {renderContent()}
-
-  
-
-          </div>
-
-  
-
-          
-
-  
-
-          {showToast && (
-
-  
-
-            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md shadow-lg z-50">
-
-  
-
-              {toastMessage}
-
-  
-
-            </div>
-
-  
-
-          )}
-
-  
-
-        </div>
-
-  
-
-      );
-
+  const [activeTab, setActiveTab] = useState('shinchou');
+
+  const renderContent = (currentActiveTab: string) => {
+    const activeItem = tabItems.find(item => item.id === currentActiveTab);
+    return activeItem ? activeItem.content : null;
   };
+
+  return (
+    <div className="relative flex flex-col h-screen w-full">
+      <h1 className="text-center text-xl font-bold p-4 bg-gray-100 shadow-md">
+        成長記録モード
+      </h1>
+      <Tabs
+        items={tabItems}
+        activeTab={activeTab}
+        onTabClick={(id) => setActiveTab(id)}
+      />
+
+    </div>
+  );
+};
 
 export default GrowthRecordPage;

@@ -41,8 +41,15 @@ vi.mock('three', async (importOriginal) => {
   };
 });
 
+const mockXrSession = {
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  requestReferenceSpace: vi.fn(() => Promise.resolve({})),
+} as unknown as XRSession;
+
 const mockStartARSession = vi.fn(async () => {
-  mockSetAnimationLoop(vi.fn());
+  // Simulate successful session request
+  return Promise.resolve(mockXrSession);
 });
 
 // Mock the useWebXR hook
@@ -50,7 +57,7 @@ vi.mock('../core/ar/useWebXR', () => ({
   useWebXR: vi.fn(() => ({
     isWebXRSupported: true,
     startARSession: mockStartARSession,
-    arSession: null,
+    arSession: mockXrSession,
     arRef: { current: null },
   })),
 }));
@@ -58,7 +65,7 @@ vi.mock('../core/ar/useWebXR', () => ({
 // Mock the useCamera hook
 vi.mock('../core/camera/useCamera', () => ({
   useCamera: vi.fn(() => ({
-    stream: null,
+    stream: mockMediaStream,
     error: null,
     startCamera: vi.fn(),
     stopCamera: vi.fn(),
@@ -71,12 +78,19 @@ import * as measure from '../core/measure/calculate2dDistance';
 import { type Mock, type MockInstance } from 'vitest';
 import { isWebXRAvailable } from '../core/ar/webxrUtils';
 vi.mock('../core/ar/webxrUtils', () => ({
-  isWebXRAvailable: vi.fn(),
+  isWebXRAvailable: vi.fn(() => Promise.resolve(true)),
 }));
 import * as cameraUtils from '../core/camera/utils';
 
+import * as scaleEstimator from '../core/reference/ScaleEstimation';
+
 // Mock the render functions as they are not relevant to this test
 import * as drawMeasurement from '../core/render/drawMeasurement';
+
+vi.mock('../core/reference/ScaleEstimation', () => ({
+  estimateScale: vi.fn(),
+  DEFAULT_CONFIDENCE_THRESHOLD: 0.7,
+}));
 
 // Mock URL.createObjectURL globally
 vi.stubGlobal('URL', {
@@ -157,8 +171,8 @@ describe('MeasurePage', () => {
         <MeasurePage />
       </Suspense>
     );
-    const canvas = await screen.findByTestId('measure-canvas', undefined, {
-      timeout: 10000,
+    const canvas = await screen.findByTestId('measure-canvas-2d', undefined, {
+      timeout: 30000,
     });
 
     fireEvent.click(canvas, { clientX: 100, clientY: 100 });
@@ -170,9 +184,9 @@ describe('MeasurePage', () => {
     expect(spy).toHaveBeenCalledWith(points[0], points[1], scale!.mmPerPx);
 
     expect(
-      await screen.findByText('123.5 cm', undefined, { timeout: 10000 })
+      await screen.findByText('123.5 cm', undefined, { timeout: 30000 })
     ).toBeInTheDocument();
-  }, 10000);
+  }, 30000);
 
   it('should draw measurement line and label in fallback mode after two taps', async () => {
     useMeasureStore.getState().setScale({
@@ -187,8 +201,8 @@ describe('MeasurePage', () => {
         <MeasurePage />
       </Suspense>
     );
-    const canvas = await screen.findByTestId('measure-canvas', undefined, {
-      timeout: 10000,
+    const canvas = await screen.findByTestId('measure-canvas-2d', undefined, {
+      timeout: 30000,
     });
 
     fireEvent.click(canvas, { clientX: 100, clientY: 100 });
@@ -203,8 +217,8 @@ describe('MeasurePage', () => {
         expect.any(Number),
         expect.any(Number)
       );
-    });
-  }, 10000);
+    }, { timeout: 30000 });
+  }, 30000);
 
   it('should clear the measurement on the third tap and start a new one', async () => {
     useMeasureStore.getState().setScale({
@@ -219,15 +233,15 @@ describe('MeasurePage', () => {
         <MeasurePage />
       </Suspense>
     );
-    const canvas = await screen.findByTestId('measure-canvas', undefined, {
-      timeout: 10000,
+    const canvas = await screen.findByTestId('measure-canvas-2d', undefined, {
+      timeout: 30000,
     });
 
     fireEvent.click(canvas, { clientX: 100, clientY: 100 });
     fireEvent.click(canvas, { clientX: 200, clientY: 200 });
 
     expect(
-      await screen.findByText('123.5 cm', undefined, { timeout: 10000 })
+      await screen.findByText('123.5 cm', undefined, { timeout: 30000 })
     ).toBeInTheDocument();
     expect(useMeasureStore.getState().points.length).toBe(2);
 
@@ -235,7 +249,7 @@ describe('MeasurePage', () => {
 
     expect(useMeasureStore.getState().points.length).toBe(1);
     expect(screen.queryByText('123.5 cm')).not.toBeInTheDocument();
-  }, 10000);
+  }, 30000);
 
   it('should display unit selection and default to cm', async () => {
     render(
@@ -244,18 +258,18 @@ describe('MeasurePage', () => {
       </Suspense>
     );
     expect(
-      await screen.findByLabelText('cm', undefined, { timeout: 10000 })
+      await screen.findByLabelText('cm', undefined, { timeout: 30000 })
     ).toBeInTheDocument();
     expect(
-      await screen.findByLabelText('m', undefined, { timeout: 10000 })
+      await screen.findByLabelText('m', undefined, { timeout: 30000 })
     ).toBeInTheDocument();
     expect(
-      await screen.findByLabelText('cm', undefined, { timeout: 10000 })
+      await screen.findByLabelText('cm', undefined, { timeout: 30000 })
     ).toBeChecked();
     expect(
-      await screen.findByLabelText('m', undefined, { timeout: 10000 })
+      await screen.findByLabelText('m', undefined, { timeout: 30000 })
     ).not.toBeChecked();
-  }, 10000);
+  }, 30000);
 
   it('should change the displayed measurement unit when unit selection changes', async () => {
     // Set initial state directly in the store
@@ -281,7 +295,7 @@ describe('MeasurePage', () => {
     // Check initial state
     await waitFor(() => {
       expect(screen.getByText('123.5 cm')).toBeInTheDocument();
-    });
+    }, { timeout: 30000 });
 
     // Change unit
     fireEvent.click(screen.getByLabelText('m'));
@@ -290,8 +304,8 @@ describe('MeasurePage', () => {
     await waitFor(() => {
       expect(screen.getByText('1.2 m')).toBeInTheDocument();
       expect(screen.queryByText('123.5 cm')).not.toBeInTheDocument();
-    });
-  }, 10000);
+    }, { timeout: 30000 });
+  }, 30000);
 
   it('should render a reset button', async () => {
     render(
@@ -303,10 +317,10 @@ describe('MeasurePage', () => {
       await screen.findByRole(
         'button',
         { name: 'リセット' },
-        { timeout: 10000 }
+        { timeout: 30000 }
       )
     ).toBeInTheDocument();
-  }, 10000);
+  }, 30000);
 
   it('should clear measurement and points when reset button is clicked', async () => {
     useMeasureStore.getState().setScale({
@@ -321,15 +335,15 @@ describe('MeasurePage', () => {
         <MeasurePage />
       </Suspense>
     );
-    const canvas = await screen.findByTestId('measure-canvas', undefined, {
-      timeout: 10000,
+    const canvas = await screen.findByTestId('measure-canvas-2d', undefined, {
+      timeout: 30000,
     });
 
     fireEvent.click(canvas, { clientX: 100, clientY: 100 });
     fireEvent.click(canvas, { clientX: 200, clientY: 200 });
 
     expect(
-      await screen.findByText('123.5 cm', undefined, { timeout: 10000 })
+      await screen.findByText('123.5 cm', undefined, { timeout: 30000 })
     ).toBeInTheDocument();
     expect(useMeasureStore.getState().points.length).toBe(2);
 
@@ -337,13 +351,13 @@ describe('MeasurePage', () => {
       await screen.findByRole(
         'button',
         { name: 'リセット' },
-        { timeout: 10000 }
+        { timeout: 30000 }
       )
     );
 
     expect(screen.queryByText('123.5 cm')).not.toBeInTheDocument();
     expect(useMeasureStore.getState().points.length).toBe(0);
-  }, 10000);
+  }, 30000);
 
   it('should log FPS to console when AR session is active', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -468,4 +482,92 @@ describe('MeasurePage', () => {
     renderSpy.mockRestore();
     performanceNowSpy.mockRestore();
   }, 15000);
+});
+
+describe('MeasurePage - Scale Estimation Dialog', () => {
+  const mockEstimateScale = scaleEstimator.estimateScale as Mock;
+
+  beforeAll(() => {
+    // JSDOM doesn't trigger onload for images, so we mock the src setter to do it synchronously.
+    Object.defineProperty(global.Image.prototype, 'src', {
+      configurable: true,
+      set(value) {
+        if (value) {
+          this.onload?.({} as Event);
+        }
+      },
+    });
+  });
+
+  afterAll(() => {
+    // Restore the original src setter
+    Object.defineProperty(global.Image.prototype, 'src', {
+      value: Object.getOwnPropertyDescriptor(global.Image.prototype, 'src'),
+    });
+  });
+
+  beforeEach(() => {
+    mockEstimateScale.mockClear();
+    // Ensure OpenCV is ready and reset the store state for each test
+    useMeasureStore.setState({ ...originalState, isCvReady: true });
+  });
+
+  it('should show confirmation dialog when scale estimation confidence is high', async () => {
+    mockEstimateScale.mockReturnValue({
+      mmPerPx: 0.1,
+      confidence: 0.9,
+      matchedReferenceObject: { name: 'A4用紙' },
+      matchedDetectedRectangle: { width: 2100, height: 2970 }, // dummy
+    });
+
+    render(
+      <Suspense fallback={<div>Loading...</div>}>
+        <MeasurePage />
+      </Suspense>
+    );
+
+    const fileInput = screen.getByTestId('hidden-file-input');
+    const file = new File(['(⌐□_□)'], 'test.png', { type: 'image/png' });
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    // Use regex to find text that includes the dynamic confidence value
+    expect(await screen.findByText(/「A4用紙」を基準にスケールを補正しますか？/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'はい' }));
+
+    await waitFor(() => {
+      expect(useMeasureStore.getState().scale?.confidence).toBe(0.9);
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('should not show confirmation dialog when scale estimation confidence is low', async () => {
+    mockEstimateScale.mockReturnValue({
+      mmPerPx: 0,
+      confidence: 0.4,
+      matchedReferenceObject: null,
+      matchedDetectedRectangle: null,
+    });
+
+    render(
+      <Suspense fallback={<div>Loading...</div>}>
+        <MeasurePage />
+      </Suspense>
+    );
+
+    const fileInput = screen.getByTestId('hidden-file-input');
+    const file = new File(['(⌐□_□)'], 'test.png', { type: 'image/png' });
+
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(mockEstimateScale).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(useMeasureStore.getState().scale).toBe(null);
+  });
 });

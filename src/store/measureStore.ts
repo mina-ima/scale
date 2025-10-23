@@ -73,9 +73,13 @@ export interface MeasureState {
   /** クリック動作モード（2点測定 / 4点平面校正 など） */
   selectionMode: SelectionMode;
 
-  /** ★ 追加: 補正方法の選択モード */
+  /** OpenCV.jsの初期化が完了したか */
+  isCvReady: boolean;
+  /** 補正方法の選択モード */
   calibrationMode: CalibrationMode;
 
+  /** OpenCV.jsの初期化状態を設定 */
+  setIsCvReady: (isReady: boolean) => void;
   setMeasureMode: (mode: MeasureMode) => void;
 
   /** ScaleEstimation そのものを設定（既存互換） */
@@ -128,11 +132,13 @@ export const useMeasureStore = create<MeasureState>((set) => ({
   cameraToggleRequested: false,
   facingMode: 'environment',
 
+  isCvReady: false,
   selectionMode: 'measure',
   calibrationMode: 'length', // 初期値は2点補正
 
   getCanvasBlobFunction: null,
 
+  setIsCvReady: (isReady) => set({ isCvReady: isReady }),
   setMeasureMode: (mode) => set({ measureMode: mode }),
 
   // 既存互換のスケール設定

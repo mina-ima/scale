@@ -209,7 +209,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
 
       {/* ===== パネル本体 ===== */}
       <div className="bg-black/50 backdrop-blur p-4 rounded-lg shadow-lg">
-        {/* ===== 等倍率（2点）校正パネル ===== */}
+        {/* ===== 等倍率（2点）校正 ====== */}
         {calibrationMode === 'length' && (
           <div className="mt-3">
             <div className="flex items-center gap-2 flex-wrap">
@@ -286,7 +286,10 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
               {selectionMode === 'calibrate-plane' && (
                 <button
                   className="px-3 py-1.5 rounded bg-gray-100 border hover:bg-gray-200 text-sm"
-                  onClick={(e) => { e.stopPropagation(); cancelPlaneCalibration(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cancelPlaneCalibration();
+                  }}
                   title="平面補正モードを終了（点はクリアされます）"
                 >
                   終了
