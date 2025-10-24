@@ -5,6 +5,7 @@ import {
   fireEvent,
   waitFor,
   act,
+  within,
 } from '@testing-library/react';
 import { vi } from 'vitest';
 import { CanvasRenderingContext2D } from 'canvas';
@@ -251,25 +252,24 @@ describe('MeasurePage', () => {
     expect(screen.queryByText('123.5 cm')).not.toBeInTheDocument();
   }, 30000);
 
-  it('should display unit selection and default to cm', async () => {
+  it('should display unit selection and default to cm', () => {
     render(
       <Suspense fallback={<div>Loading...</div>}>
         <MeasurePage />
       </Suspense>
     );
-    expect(
-      await screen.findByLabelText('cm', undefined, { timeout: 30000 })
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByLabelText('m', undefined, { timeout: 30000 })
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByLabelText('cm', undefined, { timeout: 30000 })
-    ).toBeChecked();
-    expect(
-      await screen.findByLabelText('m', undefined, { timeout: 30000 })
-    ).not.toBeChecked();
-  }, 30000);
+
+    const unitSelect = screen.getByRole('combobox', { name: 'Unit selection / 単位' });
+    expect(unitSelect).toBeInTheDocument();
+    expect(unitSelect).toHaveValue('cm');
+
+    // Verify options exist within the select
+    const options = within(unitSelect).getAllByRole('option');
+    expect(options).toHaveLength(3);
+    expect(options[0]).toHaveTextContent('cm');
+    expect(options[1]).toHaveTextContent('mm');
+    expect(options[2]).toHaveTextContent('inch');
+  });
 
   it('should change the displayed measurement unit when unit selection changes', async () => {
     // Set initial state directly in the store
