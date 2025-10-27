@@ -210,6 +210,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         </div>
       </div>
     </div>
-  };
+  );
+};
 
 export default GrowthMeasurementTabContent;
