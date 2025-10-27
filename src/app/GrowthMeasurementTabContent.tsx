@@ -204,6 +204,3 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
 };
 
 export default GrowthMeasurementTabContent;
-
-
-export default GrowthMeasurementTabContent;
