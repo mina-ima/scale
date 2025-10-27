@@ -1,3 +1,4 @@
+// src/app/MeasureCalibrationPanel.tsx
 import React, { useState, useMemo } from 'react';
 import { useMeasureStore, type Homography } from '../store/measureStore';
 import { computeHomography } from '../core/geometry/homography';
@@ -42,7 +43,7 @@ const LENGTH_PRESETS: { key: ReferenceKeyLength; label: string; mm: number | nul
 
 interface MeasureCalibrationPanelProps {
   // useMeasureStoreから取得するstate
-  points: { x: number; y: number }[];
+  points: { x: number; y: number }[] | undefined;
   selectionMode: 'measure' | 'calibrate-plane';
   calibrationMode: 'length' | 'plane';
   homography: Homography | null;
@@ -65,6 +66,9 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
   setScaleMmPerPx,
   clearPoints,
 }) => {
+  // --- 安全化：points が未定義でも必ず配列として扱う ---
+  const safePoints = Array.isArray(points) ? points : [];
+
   // 等倍率（2点）用
   const [lenKey, setLenKey] = useState<ReferenceKeyLength>('creditCardWidth');
   const [customMm, setCustomMm] = useState<string>('');
@@ -79,11 +83,11 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
   const currentMmPerPx = (scale as any)?.mmPerPx as number | undefined;
 
   const pxDistance = useMemo(() => {
-    if (points.length !== 2) return null;
-    const dx = points[0].x - points[1].x;
-    const dy = points[0].y - points[1].y;
+    if (safePoints.length !== 2) return null;
+    const dx = safePoints[0].x - safePoints[1].x;
+    const dy = safePoints[0].y - safePoints[1].y;
     return Math.hypot(dx, dy);
-  }, [points]);
+  }, [safePoints]);
 
   // ====== 等倍率（2点）校正 ======
   const applyLengthCalibration = () => {
@@ -131,7 +135,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
 
   const applyPlaneCalibration = () => {
     setCalibMsg(null);
-    if (points.length !== 4) {
+    if (safePoints.length !== 4) {
       setCalibMsg('写真上で四隅を「時計回り」で4点タップしてください。');
       return;
     }
@@ -144,7 +148,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
     }
 
     // 画像座標（px）: p0..p3（時計回り）
-    const imgPts = points.map(p => ({ x: p.x, y: p.y }));
+    const imgPts = safePoints.map(p => ({ x: p.x, y: p.y }));
 
     // 実平面上の矩形（mm）を (0,0)->(w,0)->(w,h)->(0,h) に固定
     const worldPts = [
@@ -173,7 +177,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
   };
 
   return (
-    <div className="p-4 pointer-events-auto z-30"> {/* z-indexを高く設定 */}
+    <div className="p-4 pointer-events-auto z-30">
       {/* ===== 校正方法選択タブ (パネルの外) ===== */}
       <div className="flex justify-center mb-2">
         <div className="bg-black/50 backdrop-blur rounded-lg shadow-lg flex">
@@ -240,12 +244,16 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
               )}
 
               <button
-                className={`px-3 py-1.5 rounded text-white text-sm ${points.length === 2 && selectionMode !== 'calibrate-plane' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
+                className={`px-3 py-1.5 rounded text-white text-sm ${
+                  safePoints.length === 2 && selectionMode !== 'calibrate-plane'
+                    ? 'bg-indigo-600 hover:bg-indigo-700'
+                    : 'bg-gray-400 cursor-not-allowed'
+                }`}
                 onClick={(e) => {
                   e.stopPropagation();
                   applyLengthCalibration();
                 }}
-                disabled={!(points.length === 2 && selectionMode !== 'calibrate-plane')}
+                disabled={!(safePoints.length === 2 && selectionMode !== 'calibrate-plane')}
                 title="写真上で基準物の両端を2点タップしてから適用"
               >
                 適用
@@ -263,7 +271,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
               </button>
             </div>
             <div className="mt-2 text-xs text-gray-700">
-              <div>現在の点数: {points.length}</div>
+              <div>現在の点数: {safePoints.length}</div>
               <div>
                 {pxDistance != null
                   ? <>選択中の区間: {Math.round(pxDistance)} px</>
@@ -339,7 +347,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
 
               <button
                 className={`px-3 py-1.5 rounded text-white text-sm ${
-                  selectionMode === 'calibrate-plane' && points.length === 4
+                  selectionMode === 'calibrate-plane' && safePoints.length === 4
                     ? 'bg-teal-700 hover:bg-teal-800'
                     : 'bg-gray-400 cursor-not-allowed'
                 }`}
@@ -347,7 +355,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
                   e.stopPropagation();
                   applyPlaneCalibration();
                 }}
-                disabled={!(selectionMode === 'calibrate-plane' && points.length === 4)}
+                disabled={!(selectionMode === 'calibrate-plane' && safePoints.length === 4)}
                 title="四隅を4点タップ後に適用"
               >
                 適用
@@ -359,7 +367,7 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
             </div>
 
             <div className="mt-2 text-xs text-gray-700">
-              <div>現在の点数: {points.length}（最大4点）</div>
+              <div>現在の点数: {safePoints.length}（最大4点）</div>
               <div className="text-gray-600">
                 基準の四隅を時計回りでタップ
               </div>
@@ -370,8 +378,6 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
       </div>
     </div>
   );
-
-
 };
 
 export default MeasureCalibrationPanel;
