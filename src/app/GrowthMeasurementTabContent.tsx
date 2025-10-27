@@ -26,7 +26,7 @@ function distancePx(a: Point, b: Point) {
 }
 
 interface GrowthMeasurementTabContentProps {
-  mode: ItemKey;
+  mode: ItemKey | null; // modeをオプショナルに変更
 }
 
 const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = ({ mode }) => {
@@ -41,7 +41,6 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
   const containerRef = useRef<HTMLDivElement>(null);
 
   // --- useMeasureStore --- 
-  // 保存機能で最終的な計測結果をストアに渡す必要があるかもしれないが、一旦UIの統一を優先
   const { setMeasurement } = useMeasureStore();
 
   // --- MeasurePageから移植したカメラ関連Effect ---
@@ -87,7 +86,6 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         const px = distancePx(next[0], next[1]);
         const text = `${px.toFixed(0)} px（未校正）`;
         setMeasurementText(text);
-        // 最終的な計測結果をストアにセットする
         setMeasurement({ valueCm: px / 10, valueMm: px, dateISO: new Date().toISOString().split('T')[0] });
         drawMeasurementLine(ctx, next[0], next[1], { units });
         drawMeasurementLabel(ctx, next[0], next[1], text);
@@ -107,8 +105,8 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     [doTap],
   );
 
-  // --- 既存の保存ロジックを移植したUIに統合 ---
-  const composeAndSaveImage = useCallback(async () => {
+  // --- 保存ロジック ---
+  const composeAndSaveImage = useCallback(async (saveMode: ItemKey) => {
     const measurement = points.length === 2 ? distancePx(points[0], points[1]) : 0;
     if (measurement <= 0) return;
 
@@ -128,15 +126,15 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     compositeCanvas.toBlob(async (blob) => {
       if (blob) {
         const fileName = generateFileName(
-          mode,
-          measurement, // mm単位の計測値
+          saveMode,
+          measurement,
           'cm',
           new Date().toISOString().split('T')[0]
         );
         await saveImageToDevice(blob, fileName);
       }
     });
-  }, [points, mode]);
+  }, [points]);
 
   return (
     <div
@@ -157,7 +155,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         className="absolute top-0 left-0 w-full h-full z-10 bg-transparent pointer-events-none"
       />
 
-      {/* UIオーバーレイ (MeasurePageから移植) */}
+      {/* UIオーバーレイ */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
         <div className="bg-black/50 text-white p-2 rounded-md m-2 inline-block">
           {measurementText || 'タップして計測を開始'}
@@ -179,17 +177,29 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         <div className="p-4">
           <MeasureCalibrationPanel />
         </div>
-        <div className="p-4 flex justify-between items-center">
+        <div className="p-4 flex justify-around items-center">
           <MeasureControlButtons />
           {/* 保存ボタン */}
           <button
-            onClick={composeAndSaveImage}
+            onClick={() => composeAndSaveImage('shinchou')}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-lg hover:bg-blue-600 disabled:bg-gray-400"
             disabled={points.length !== 2}
           >
-            {mode === 'shinchou' && '身長保存'}
-            {mode === 'te' && '手保存'}
-            {mode === 'ashi' && '足保存'}
+            身長保存
+          </button>
+          <button
+            onClick={() => composeAndSaveImage('te')}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-lg hover:bg-blue-600 disabled:bg-gray-400"
+            disabled={points.length !== 2}
+          >
+            手保存
+          </button>
+          <button
+            onClick={() => composeAndSaveImage('ashi')}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-lg hover:bg-blue-600 disabled:bg-gray-400"
+            disabled={points.length !== 2}
+          >
+            足保存
           </button>
           <button
             onClick={clearAll}
@@ -200,7 +210,5 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         </div>
       </div>
     </div>
-  );
-};
 
 export default GrowthMeasurementTabContent;
