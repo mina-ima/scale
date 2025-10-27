@@ -135,7 +135,7 @@ export default function MeasurePage() {
     <div
       ref={containerRef}
       data-testid="measure-page-container"
-      onPointerDown={handlePointerDown} // ハンドラをコンテナに移動
+      onClick={handlePointerDown} // onPointerDownをonClickに変更
       style={{
         width: '100%',
         height: '100vh',

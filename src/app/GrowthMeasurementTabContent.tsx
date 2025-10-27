@@ -139,7 +139,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
   return (
     <div
       ref={containerRef}
-      onPointerDown={handlePointerDown}
+      onClick={handlePointerDown} // onPointerDownをonClickに変更
       className="relative w-full h-full user-select-none"
     >
       <video
