@@ -42,11 +42,13 @@ const GrowthRecordPage: React.FC = () => {
       <h1 className="text-center text-xl font-bold p-4 bg-gray-100 shadow-md">
         成長記録モード
       </h1>
-      <Tabs
-        items={tabItems}
-        activeTab={activeTab}
-        onTabClick={(id) => setActiveTab(id)}
-      />
+      <div className="flex-grow">
+        <Tabs
+          items={tabItems}
+          activeTab={activeTab}
+          onTabClick={(id) => setActiveTab(id)}
+        />
+      </div>
     </div>
   );
 };

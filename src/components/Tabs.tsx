@@ -64,7 +64,7 @@ const Tabs: React.FC<TabsProps> = ({ items, initialActiveTabId }) => {
   const activeItem = items.find((item) => item.id === activeTabId);
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <div role="tablist" className="flex border-b border-gray-200">
         {items.map((item, index) => (
           <button
@@ -85,7 +85,7 @@ const Tabs: React.FC<TabsProps> = ({ items, initialActiveTabId }) => {
           </button>
         ))}
       </div>
-      <div className="mt-4">
+      <div className="mt-4 flex-grow">
         {activeItem && (
           <div
             key={activeItem.id}
