@@ -16,7 +16,7 @@ export interface DetectedCircle {
   radius: number;
 }
 
-import { cv, Mat } from 'opencv-ts';
+import type { Mat } from 'opencv-ts';
 
 // Shape detection function implemented with OpenCV-ts
 export const detectShapes = (
@@ -25,6 +25,11 @@ export const detectShapes = (
   rectangles: DetectedRectangle[];
   circles: DetectedCircle[];
 } => {
+  const cv = (window as any).cv;
+  if (!cv) {
+    console.warn('OpenCV.js is not ready for shape detection.');
+    return { rectangles: [], circles: [] };
+  }
   const gray = new cv.Mat();
   cv.cvtColor(image, gray, cv.COLOR_RGBA2GRAY, 0);
 

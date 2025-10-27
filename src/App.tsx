@@ -7,16 +7,28 @@ import { ErrorBoundary } from './app/ErrorBoundary'; // ← 追加
 const MeasurePage = lazy(() => import('./app/MeasurePage'));
 const GrowthRecordPage = lazy(() => import('./app/GrowthRecordPage'));
 
-import { cv } from 'opencv-ts';
-
 function App() {
   const { setScale, setIsCvReady } = useMeasureStore();
 
   useEffect(() => {
-    // OpenCV.jsの初期化
-    cv.onRuntimeInitialized = () => {
-      console.log('OpenCV.js is ready.');
-      setIsCvReady(true);
+    // OpenCV.jsの初期化をポーリングで待機
+    const intervalId = setInterval(() => {
+      // `window.cv` が存在し、`onRuntimeInitialized` がまだ設定されていない場合
+      if ((window as any).cv && !(window as any).cv.onRuntimeInitialized) {
+        (window as any).cv.onRuntimeInitialized = () => {
+          console.log('OpenCV.js is ready.');
+          setIsCvReady(true);
+          // 初期化が完了したら、ポーリングを停止
+          clearInterval(intervalId);
+        };
+      } else if ((window as any).cv?.onRuntimeInitialized) {
+        // すでに初期化が完了している場合もポーリングを停止
+        clearInterval(intervalId);
+      }
+    }, 100); // 100msごとにチェック
+
+    return () => {
+      clearInterval(intervalId);
     };
   }, [setIsCvReady]);
 
