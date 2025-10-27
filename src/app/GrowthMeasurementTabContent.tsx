@@ -1,10 +1,8 @@
-import React, { useCallback, useEffect } from 'react';
-import MeasurePage from './MeasurePage';
-import { useMeasureStore, MeasureMode } from '../store/measureStore';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { useCamera } from '../core/camera/useCamera'; // useCameraをインポート
+import { useMeasureStore } from '../store/measureStore';
 import { generateFileName, saveImageToDevice } from '../utils/fileUtils';
 import { ItemKey } from '../utils/fileUtils';
-import Tabs from '../components/Tabs';
-
 import { calculate2dDistance } from '../core/measure/calculate2dDistance';
 
 interface GrowthMeasurementTabContentProps {
@@ -12,17 +10,32 @@ interface GrowthMeasurementTabContentProps {
 }
 
 const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = ({ mode }) => {
-  const { measurement, points, getCanvasBlobFunction, addPoint, clearPoints, setMeasurement } = useMeasureStore();
+  const { measurement, points, addPoint, clearPoints, setMeasurement } = useMeasureStore();
+  const { stream, startCamera, stopCamera } = useCamera(); // useCameraフックを使用
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  // コンポーネントのマウント時にカメラを開始
+  useEffect(() => {
+    startCamera();
+    return () => {
+      stopCamera();
+    };
+  }, [startCamera, stopCamera]);
 
-  // Dummy useEffect to simulate canvas drawing for tests
+  //取得したストリームをvideo要素に接続
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  // canvasへの描画処理（変更なし）
   useEffect(() => {
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        // Simulate drawing points for tests
         if (points.length > 0) {
           ctx.fillStyle = 'red';
           points.forEach(p => {
@@ -60,31 +73,39 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
   );
 
   const composeAndSaveImage = useCallback(async (saveMode: ItemKey) => {
-    console.log('composeAndSaveImage called in GrowthMeasurementTabContent');
     if (!measurement?.valueMm || !points.length) {
-      console.log('composeAndSaveImage: Pre-conditions not met.', {
-        measurement: measurement?.valueMm,
-        pointsLength: points.length,
-      });
       return;
     }
 
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
 
-    canvas.toBlob(async (blob) => {
+    // 描画用の新しいCanvasを作成
+    const compositeCanvas = document.createElement('canvas');
+    compositeCanvas.width = video.videoWidth;
+    compositeCanvas.height = video.videoHeight;
+    const ctx = compositeCanvas.getContext('2d');
+    if (!ctx) return;
+
+    // Videoの現在のフレームを描画
+    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+
+    // measurementCanvasの内容を重ねて描画
+    ctx.drawImage(canvas, 0, 0);
+
+    compositeCanvas.toBlob(async (blob) => {
       if (blob) {
         const fileName = generateFileName(
           saveMode,
           measurement.valueMm,
-          'cm', // Always 'cm' for growth measurements
+          'cm',
           measurement.dateISO || new Date().toISOString().split('T')[0]
         );
-        console.log('Generated fileName:', fileName);
         await saveImageToDevice(blob, fileName);
       }
     });
-  }, [measurement, points, canvasRef]);
+  }, [measurement, points]);
 
   useEffect(() => {
     if (points.length === 2) {
@@ -98,11 +119,17 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
   }, [points, setMeasurement]);
 
   return (
-    <div className="relative w-full h-screen">
+    <div className="relative w-full h-full">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className="absolute top-0 left-0 w-full h-full object-cover z-0"
+      />
       <canvas
         ref={canvasRef}
         data-testid={`growth-record-canvas-${mode}`}
-        className="absolute top-0 left-0 w-full h-full z-0 bg-gray-200"
+        className="absolute top-0 left-0 w-full h-full z-10 bg-transparent"
         width={window.innerWidth}
         height={window.innerHeight}
         onClick={handleClick}
