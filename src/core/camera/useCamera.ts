@@ -15,8 +15,13 @@ export const useCamera = () => {
     streamRef.current = stream;
   }, [stream]);
 
-  const startCamera = useCallback(async (mode: 'user' | 'environment') => {
-    console.log('useCamera: startCamera called with mode:', mode);
+  const facingModeRef = useRef(facingMode);
+  useEffect(() => {
+    facingModeRef.current = facingMode;
+  }, [facingMode]);
+
+  const startCamera = useCallback(async () => {
+    console.log('useCamera: startCamera called with mode:', facingModeRef.current);
     try {
       if (streamRef.current) {
         console.log(
@@ -29,7 +34,7 @@ export const useCamera = () => {
           streamRef.current.id
         );
       }
-      const result = await getCameraStream(mode);
+      const result = await getCameraStream(facingModeRef.current);
 
       if (result && 'id' in result) {
         setStream(result as MediaStream);
@@ -55,16 +60,16 @@ export const useCamera = () => {
       console.error('useCamera: Error starting camera:', err);
       return null;
     }
-  }, []); // 依存配列からfacingModeを削除
+  }, []); // 依存配列を空にして関数を安定化
 
   const stopCamera = useCallback(() => {
     console.log('useCamera: stopCamera called.');
-    if (stream) {
-      stopCameraStream(stream);
+    if (streamRef.current) {
+      stopCameraStream(streamRef.current);
       setStream(null);
       console.log('useCamera: Stream stopped and set to null.');
     }
-  }, [stream]);
+  }, []); // streamへの依存を削除し、関数を安定化
 
   const toggleCameraFacingMode = useCallback(() => {
     console.log(
@@ -74,33 +79,10 @@ export const useCamera = () => {
     setFacingMode((prevMode) => (prevMode === 'user' ? 'environment' : 'user'));
   }, [facingMode]);
 
-  // facingModeが変更されたらカメラを再起動
-  useEffect(() => {
-    console.log('useCamera: useEffect triggered. facingMode:', facingMode);
-    if (!streamRef.current) {
-      // ストリームがまだ存在しない場合のみstartCameraを呼び出す
-      startCamera(facingMode);
-    }
-    return () => {
-      console.log(
-        'useCamera: Cleanup function executed. streamRef.current:',
-        streamRef.current
-      );
-      if (streamRef.current) {
-        stopCameraStream(streamRef.current);
-        console.log(
-          'useCamera: Stream stopped by cleanup. ID:',
-          streamRef.current.id
-        );
-        streamRef.current = null; // クリーンアップ時にnullに設定
-      }
-    };
-  }, [facingMode, startCamera]); // streamを依存配列から削除
-
   return {
     stream,
     error,
-    startCamera: () => startCamera(facingMode), // 外部に公開するstartCameraは現在のfacingModeを使用
+    startCamera,
     stopCamera,
     facingMode,
     toggleCameraFacingMode,
