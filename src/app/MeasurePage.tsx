@@ -99,6 +99,10 @@ export default function MeasurePage() {
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      // UIコントロール上のイベントは無視
+      if ((e.target as HTMLElement).closest('[data-ui-control="true"]')) {
+        return;
+      }
       doTap(e.clientX, e.clientY, e.currentTarget as HTMLElement);
     },
     [doTap],
@@ -131,6 +135,7 @@ export default function MeasurePage() {
     <div
       ref={containerRef}
       data-testid="measure-page-container"
+      onPointerDown={handlePointerDown} // ハンドラをコンテナに移動
       style={{
         width: '100%',
         height: '100vh',
@@ -154,7 +159,7 @@ export default function MeasurePage() {
       />
       <canvas
         ref={canvasRef}
-        onPointerDown={handlePointerDown}
+        // onPointerDown={handlePointerDown} // ここから削除
         width={window.innerWidth}
         height={window.innerHeight}
         style={{ 
@@ -164,12 +169,13 @@ export default function MeasurePage() {
           width: '100%', 
           height: '100%', 
           zIndex: 10, 
-          backgroundColor: 'transparent' 
+          backgroundColor: 'transparent',
+          pointerEvents: 'none', // canvasのポインターイベントを無効化
         }}
       />
 
       {/* UIオーバーレイ */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
         <div
           data-testid="measurement-readout"
           aria-live="polite"
@@ -196,7 +202,7 @@ export default function MeasurePage() {
         </div>
       </div>
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
         <div className="p-4">
           <MeasureCalibrationPanel />
         </div>

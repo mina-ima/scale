@@ -61,6 +61,8 @@ const Tabs: React.FC<TabsProps> = ({ items, initialActiveTabId }) => {
     tabRefs.current[newIndex]?.focus();
   };
 
+  const activeItem = items.find((item) => item.id === activeTabId);
+
   return (
     <div>
       <div role="tablist" className="flex border-b border-gray-200">
@@ -84,18 +86,17 @@ const Tabs: React.FC<TabsProps> = ({ items, initialActiveTabId }) => {
         ))}
       </div>
       <div className="mt-4">
-        {items.map((item) => (
+        {activeItem && (
           <div
-            key={item.id}
-            id={`panel-${item.id}`}
+            key={activeItem.id}
+            id={`panel-${activeItem.id}`}
             role="tabpanel"
-            aria-labelledby={`tab-${item.id}`}
-            hidden={activeTabId !== item.id}
-            className={activeTabId === item.id ? 'block' : 'hidden'}
+            aria-labelledby={`tab-${activeItem.id}`}
+            className="h-full"
           >
-            {item.content}
+            {activeItem.content}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

@@ -37,11 +37,6 @@ const tabItems = [
 const GrowthRecordPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('shinchou');
 
-  const renderContent = (currentActiveTab: string) => {
-    const activeItem = tabItems.find(item => item.id === currentActiveTab);
-    return activeItem ? activeItem.content : null;
-  };
-
   return (
     <div className="relative flex flex-col h-screen w-full">
       <h1 className="text-center text-xl font-bold p-4 bg-gray-100 shadow-md">
@@ -52,9 +47,10 @@ const GrowthRecordPage: React.FC = () => {
         activeTab={activeTab}
         onTabClick={(id) => setActiveTab(id)}
       />
-
     </div>
   );
 };
+
+export default GrowthRecordPage;
 
 export default GrowthRecordPage;
