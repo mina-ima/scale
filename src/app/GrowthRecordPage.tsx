@@ -16,5 +16,3 @@ const GrowthRecordPage: React.FC = () => {
 };
 
 export default GrowthRecordPage;
-
-export default GrowthRecordPage;
