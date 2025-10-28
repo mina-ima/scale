@@ -39,7 +39,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
   const [scaleDialog, setScaleDialog] = useState<{ open: boolean; confidence: number | null }>({ open: false, confidence: null });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null); // 追加: 「写真を選ぶ」用
+  const fileInputRef = useRef<HTMLInputElement>(null); // 「写真を選ぶ」用
 
   // --- useMeasureStore --- 
   const { setMeasurement } = useMeasureStore();
@@ -57,6 +57,33 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     }
   }, [stream]);
 
+  // --- DPR対応: キャンバスを CSS×DPR の整数に常時リサイズ ---
+  const resizeCanvasToContainer = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const rect = container.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    // 見た目サイズは100%
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+  }, []);
+
+  useEffect(() => {
+    resizeCanvasToContainer();
+    const onResize = () => resizeCanvasToContainer();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [resizeCanvasToContainer]);
+
   // --- 測定ロジック ---
   const clearAll = useCallback(() => {
     setPoints([]);
@@ -67,10 +94,18 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     }
   }, []);
 
+  // CSS座標→内部ピクセル座標へ（DPRスケール＆整数化）
+  const toInternalPoint = useCallback((clientX: number, clientY: number, currentTarget: HTMLElement | null): Point => {
+    const rect = currentTarget?.getBoundingClientRect?.() ?? { left: 0, top: 0, width: 1, height: 1 };
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const xCss = clientX - rect.left;
+    const yCss = clientY - rect.top;
+    return { x: Math.round(xCss * dpr), y: Math.round(yCss * dpr) };
+  }, []);
+
   const doTap = useCallback((clientX: number, clientY: number, currentTarget: HTMLElement | null) => {
-    const rect = currentTarget?.getBoundingClientRect?.() ?? { left: 0, top: 0 };
-    const p: Point = { x: clientX - rect.left, y: clientY - rect.top };
-    const ctx = canvasRef.current?.getContext('2d');
+    const p = toInternalPoint(clientX, clientY, currentTarget);
+    const ctx = canvasRef.current?.getContext('2d', { willReadFrequently: true } as any);
     if (!ctx || !canvasRef.current) return;
 
     setPoints((prev) => {
@@ -89,14 +124,18 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         const text = `${px.toFixed(0)} px（未校正）`;
         setMeasurementText(text);
         // 成長記録モード側の store 更新（暫定: px→mm/cmの換算は別途補正で上書きされる想定）
-        setMeasurement({ valueCm: px / 10, valueMm: px, dateISO: new Date().toISOString().split('T')[0] });
+        setMeasurement({
+          valueCm: px / 10,
+          valueMm: px,
+          dateISO: new Date().toISOString().split('T')[0],
+        });
         drawMeasurementLine(ctx, next[0], next[1], { units });
         drawMeasurementLabel(ctx, next[0], next[1], text);
       }
 
       return next;
     });
-  }, [units, setMeasurement]);
+  }, [toInternalPoint, units, setMeasurement]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -109,7 +148,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     [doTap],
   );
 
-  // --- 保存ロジック ---
+  // --- 保存ロジック（内部解像度で合成） ---
   const composeAndSaveImage = useCallback(async (saveMode: ItemKey) => {
     const measurement = points.length === 2 ? distancePx(points[0], points[1]) : 0;
     if (measurement <= 0) return;
@@ -118,13 +157,16 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     const video = videoRef.current;
     if (!canvas || !video) return;
 
+    // 合成はキャンバスの内部解像度に合わせる
     const compositeCanvas = document.createElement('canvas');
-    compositeCanvas.width = video.videoWidth || window.innerWidth;
-    compositeCanvas.height = video.videoHeight || window.innerHeight;
-    const ctx = compositeCanvas.getContext('2d');
+    compositeCanvas.width = canvas.width;
+    compositeCanvas.height = canvas.height;
+    const ctx = compositeCanvas.getContext('2d', { willReadFrequently: true } as any);
     if (!ctx) return;
 
+    // 背景（video）を内部解像度へ拡大描画
     ctx.drawImage(video, 0, 0, compositeCanvas.width, compositeCanvas.height);
+    // オーバーレイ（計測キャンバス）
     ctx.drawImage(canvas, 0, 0);
 
     compositeCanvas.toBlob(async (blob) => {
@@ -140,7 +182,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     });
   }, [points]);
 
-  // --- 画像入力→スケール推定（任意） ---
+  // --- 画像入力→スケール推定（任意の補助UI） ---
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -170,9 +212,11 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     const video = videoRef.current;
     if (!video) return;
 
-    const w = video.videoWidth || window.innerWidth;
-    const h = video.videoHeight || window.innerHeight;
+    const w = video.videoWidth || 1;
+    const h = video.videoHeight || 1;
 
+    // 必要ならここで「静止画キャンバスへcover描画」を入れても良いが、
+    // Growthタブはライブプレビュー上での計測前提のため、フィードバックのみ
     const off = document.createElement('canvas');
     off.width = w;
     off.height = h;
@@ -207,8 +251,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
       />
       <canvas
         ref={canvasRef}
-        width={window.innerWidth}
-        height={window.innerHeight}
+        // width/heightはJS側でCSS×DPRに合わせて設定する（属性は指定しない）
         className="absolute top-0 left-0 w-full h-full z-10 bg-transparent pointer-events-none"
       />
 
