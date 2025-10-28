@@ -10,7 +10,8 @@ import {
   drawMeasurementPoint,
 } from '../core/render/drawMeasurement';
 
-import { estimateScale } from '../core/reference/ScaleEstimation';
+// ※ スケール推定は一旦使わない
+// import { estimateScale } from '../core/reference/ScaleEstimation';
 
 type Point = { x: number; y: number };
 type Units = 'cm' | 'mm' | 'inch';
@@ -22,18 +23,13 @@ function distancePx(a: Point, b: Point) {
 }
 
 export default function MeasurePage() {
-  // toggleCameraFacingMode を使用（カメラ切替）
+  // カメラ切替も利用
   const { stream, startCamera, stopCamera, toggleCameraFacingMode } = useCamera() as any;
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const [points, setPoints] = useState<Point[]>([]);
   const [measurementText, setMeasurementText] = useState<string>('');
   const [units, setUnits] = useState<Units>('cm');
-
-  const [scaleDialog, setScaleDialog] = useState<{
-    open: boolean;
-    confidence: number | null;
-  }>({ open: false, confidence: null });
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -55,16 +51,18 @@ export default function MeasurePage() {
       canvas.height = h;
     }
 
-    // CSSはそのまま100%でOK
+    // CSSはそのまま100%
     canvas.style.width = '100%';
     canvas.style.height = '100%';
   }, []);
 
+  // カメラ開始/停止
   useEffect(() => {
     startCamera();
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
+  // ストリームをvideoへ
   useEffect(() => {
     if (videoRef.current && stream) {
       // @ts-expect-error: srcObject はモダンブラウザで利用可
@@ -72,6 +70,7 @@ export default function MeasurePage() {
     }
   }, [stream]);
 
+  // リサイズに追随
   useEffect(() => {
     resizeCanvasToContainer();
     const onResize = () => resizeCanvasToContainer();
@@ -100,7 +99,7 @@ export default function MeasurePage() {
       ctx.clearRect(0, 0, destW, destH);
       ctx.drawImage(src, dx, dy, drawW, drawH);
 
-      // 背景を静止画にしたので、測定はクリアしてメッセージ更新
+      // 背景を静止画にしたので、測定はクリア
       setPoints([]);
       setMeasurementText('画像を表示しました。2点をタップして計測してください。');
     },
@@ -116,7 +115,7 @@ export default function MeasurePage() {
     }
   }, []);
 
-  // CSS→内部ピクセル座標へ変換（DPRスケーリング＆整数化）
+  // CSS→内部ピクセル座標に変換（DPRスケーリング＆整数化）
   const toInternalPoint = useCallback((clientX: number, clientY: number, currentTarget: HTMLElement | null): Point => {
     const rect = currentTarget?.getBoundingClientRect?.() ?? { left: 0, top: 0, width: 1, height: 1 };
     const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -155,9 +154,8 @@ export default function MeasurePage() {
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if ((e.target as HTMLElement).closest('[data-ui-control="true"]')) {
-        return;
-      }
+      // UI上のクリックは拾わない
+      if ((e.target as HTMLElement).closest('[data-ui-control="true"]')) return;
       doTap(e.clientX, e.clientY, e.currentTarget as HTMLElement);
     },
     [doTap],
@@ -178,29 +176,25 @@ export default function MeasurePage() {
     fileInputRef.current?.click();
   }, []);
 
-  const onPhotoSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPhotoSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    try {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        drawCoverToCanvas(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
-        URL.revokeObjectURL(url);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        setMeasurementText('画像の読み込みに失敗しました');
-      };
-      img.src = url;
 
-      // 参考: スケール推定（画面反映には影響させない）
-      // ファイル版の推定APIを使っている場合はここで実行
-      const result = await estimateScale([] as any, [] as any).catch(() => null);
-      void result;
-    } finally {
-      e.target.value = '';
-    }
+    // スケール推定は呼ばず、まず画面に確実に反映
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      drawCoverToCanvas(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setMeasurementText('画像の読み込みに失敗しました');
+    };
+    img.src = url;
+
+    // 入力クリア
+    e.target.value = '';
   }, [drawCoverToCanvas]);
 
   const onToggleCameraFacingMode = useCallback(() => {
@@ -215,69 +209,25 @@ export default function MeasurePage() {
     setMeasurementText('この端末ではAR未対応/未実装です');
   }, []);
 
-  // ====== ファイル選択でのスケール推定（従来のハンドラは残すが UI 反映は上のonPhotoSelectedで行う） ======
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const result = await estimateScale(file as any);
-        const confidence = (result as any)?.confidence ?? 0;
-        if (confidence >= 0.8) {
-          setScaleDialog({ open: true, confidence });
-        } else {
-          setScaleDialog({ open: false, confidence });
-        }
-      } catch {
-        setScaleDialog({ open: false, confidence: null });
-      } finally {
-        e.target.value = '';
-      }
-    },
-    [],
-  );
-
   return (
     <div
       ref={containerRef}
       data-testid="measure-page-container"
       onClick={handlePointerDown}
-      style={{
-        width: '100%',
-        height: '100vh',
-        position: 'relative',
-        userSelect: 'none',
-      }}
+      style={{ width: '100%', height: '100vh', position: 'relative', userSelect: 'none' }}
     >
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          zIndex: 0,
-        }}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
       />
       <canvas
         ref={canvasRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          zIndex: 10,
-          backgroundColor: 'transparent',
-          pointerEvents: 'none', // 描画のみ
-        }}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10, backgroundColor: 'transparent', pointerEvents: 'none' }}
       />
 
-      {/* UIオーバーレイ */}
+      {/* 上部UI */}
       <div
         style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }}
         data-ui-control="true"
@@ -285,18 +235,12 @@ export default function MeasurePage() {
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
       >
-        <div
-          data-testid="measurement-readout"
-          aria-live="polite"
-          className="bg-black/50 text-white p-2 rounded-md m-2 inline-block"
-        >
+        <div data-testid="measurement-readout" aria-live="polite" className="bg-black/50 text-white p-2 rounded-md m-2 inline-block">
           {measurementText || 'タップして計測を開始'}
         </div>
 
         <div className="absolute top-2 right-2">
-          <label htmlFor="units-select" className="sr-only">
-            Unit selection / 単位
-          </label>
+          <label htmlFor="units-select" className="sr-only">Unit selection / 単位</label>
           <select
             id="units-select"
             aria-label="Unit selection / 単位"
@@ -311,6 +255,7 @@ export default function MeasurePage() {
         </div>
       </div>
 
+      {/* 下部UI */}
       <div
         style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }}
         data-ui-control="true"
@@ -340,31 +285,15 @@ export default function MeasurePage() {
         </div>
       </div>
 
-      {/* 非表示のファイル入力（画面反映: onPhotoSelected / 推定UI: handleFileChange） */}
+      {/* 非表示のファイル入力：画面反映のみ行う */}
       <input
         ref={fileInputRef}
         data-testid="hidden-file-input"
         type="file"
         accept="image/*"
         style={{ display: 'none' }}
-        onChange={(e) => {
-          onPhotoSelected(e);
-          // スケール推定ダイアログも使いたい場合は下の行を残す
-          handleFileChange(e);
-        }}
+        onChange={onPhotoSelected}
       />
-
-      {scaleDialog.open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="absolute inset-0 bg-black/40 flex items-center justify-center z-50"
-        >
-          <div className="bg-white p-4 rounded-lg shadow-xl">
-            <div>スケール推定の信頼度: {Math.round((scaleDialog.confidence ?? 0) * 100)}%</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
