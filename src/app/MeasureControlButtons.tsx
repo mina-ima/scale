@@ -25,7 +25,14 @@ const MeasureControlButtons: React.FC<MeasureControlButtonsProps> = ({
   } = useMeasureStore();
 
   return (
-    <div className="px-4 py-2 pointer-events-auto flex justify-center z-30"> {/* z-indexを高く設定 */}
+    <div
+      className="px-4 py-2 pointer-events-auto flex justify-center z-30"
+      data-ui-control="true"
+      // 親（MeasurePage）のonClickへバブリングさせない保険
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="bg-black/50 backdrop-blur p-2 rounded-lg shadow-lg flex flex-wrap gap-2">
         {/* AR開始（対応時） */}
         {!isArMode && !error && (

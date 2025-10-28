@@ -41,31 +41,21 @@ const LENGTH_PRESETS: { key: ReferenceKeyLength; label: string; mm: number | nul
   { key: 'customLength',    label: '任意の長さ（mmを入力）', mm: null },
 ];
 
-interface MeasureCalibrationPanelProps {
-  // useMeasureStoreから取得するstate
-  points: { x: number; y: number }[] | undefined;
-  selectionMode: 'measure' | 'calibrate-plane';
-  calibrationMode: 'length' | 'plane';
-  homography: Homography | null;
-  // useMeasureStoreから取得するaction
-  setSelectionMode: (mode: 'measure' | 'calibrate-plane') => void;
-  setCalibrationMode: (mode: 'length' | 'plane') => void;
-  setHomography: (H: Homography | null) => void;
-  setScaleMmPerPx: (mmPerPx: number | null) => void;
-  clearPoints: () => void;
-}
+const MeasureCalibrationPanel: React.FC = () => {
+  // ---- useMeasureStore から直接取得（props不要に統一）----
+  const {
+    points,
+    selectionMode,
+    calibrationMode,
+    homography,
+    scale,
+    setSelectionMode,
+    setCalibrationMode,
+    setHomography,
+    setScaleMmPerPx,
+    clearPoints,
+  } = useMeasureStore();
 
-const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
-  points,
-  selectionMode,
-  calibrationMode,
-  homography,
-  setSelectionMode,
-  setCalibrationMode,
-  setHomography,
-  setScaleMmPerPx,
-  clearPoints,
-}) => {
   // --- 安全化：points が未定義でも必ず配列として扱う ---
   const safePoints = Array.isArray(points) ? points : [];
 
@@ -79,7 +69,6 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
   const [customRectW, setCustomRectW] = useState<string>('');
   const [customRectH, setCustomRectH] = useState<string>('');
 
-  const { scale } = useMeasureStore(); // scaleはuseMeasureStoreから直接取得
   const currentMmPerPx = (scale as any)?.mmPerPx as number | undefined;
 
   const pxDistance = useMemo(() => {
@@ -122,10 +111,8 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
   // ====== 平面補正（4点） ======
   const startPlaneCalibration = () => {
     setCalibMsg(null);
-    // クリックモードを「四隅キャプチャ」に
-    setSelectionMode('calibrate-plane');
-    // 既存の2点/計測はクリアしておくと迷わない
-    clearPoints();
+    setSelectionMode('calibrate-plane'); // クリックモードを「四隅キャプチャ」に
+    clearPoints(); // 既存の2点/計測はクリア
   };
 
   const cancelPlaneCalibration = () => {
@@ -177,7 +164,13 @@ const MeasureCalibrationPanel: React.FC<MeasureCalibrationPanelProps> = ({
   };
 
   return (
-    <div className="p-4 pointer-events-auto z-30">
+    <div
+      className="p-4 pointer-events-auto z-30"
+      data-ui-control="true"
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* ===== 校正方法選択タブ (パネルの外) ===== */}
       <div className="flex justify-center mb-2">
         <div className="bg-black/50 backdrop-blur rounded-lg shadow-lg flex">

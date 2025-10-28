@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useCamera } from '../core/camera/useCamera'; // useCameraをインポート
+import { useCamera } from '../core/camera/useCamera';
 
 // === 自作コンポーネント ===
 import MeasureControlButtons from './MeasureControlButtons';
@@ -41,9 +41,10 @@ export default function MeasurePage() {
     confidence: number | null;
   }>({ open: false, confidence: null });
 
-  // Canvas / コンテナ参照
+  // Canvas / コンテナ / ファイル入力参照
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // カメラの開始と停止
   useEffect(() => {
@@ -54,6 +55,7 @@ export default function MeasurePage() {
   // ストリームをvideo要素に接続
   useEffect(() => {
     if (videoRef.current && stream) {
+      // @ts-expect-error: srcObject is supported in modern browsers
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
@@ -130,12 +132,52 @@ export default function MeasurePage() {
     [],
   );
 
+  // ====== ボタン用ハンドラ（配線） ======
+  // 単位切替は select の onChange で既にOK
+
+  // 端末から写真を選択
+  const handlePickPhoto = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // カメラ映像を1フレーム取り込み（最低限のMVP: キャンバスに転写、テキストで通知）
+  const handleCapturePhoto = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const w = video.videoWidth || window.innerWidth;
+    const h = video.videoHeight || window.innerHeight;
+
+    // オフスクリーンキャンバスを使ってフレームを確保
+    const off = document.createElement('canvas');
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
+
+    // 取り込み完了のフィードバック（本来はこの画像で補正や計測用の状態に遷移）
+    setMeasurementText('写真を取り込みました');
+    // 必要に応じて: off.toBlob(...) で画像化→推定/保存へ
+  }, []);
+
+  // カメラ前後切替（簡易版: 再起動のトーストのみ。※useCameraに切替APIがある場合は置換）
+  const handleToggleCameraFacingMode = useCallback(() => {
+    setMeasurementText('カメラ切替（暫定）');
+    // TODO: useCamera 側に facingMode 切替がある場合はそちらを呼ぶ
+  }, []);
+
+  // AR開始（環境依存のためここでは無効化。対応後に置換）
+  const handleStartARSession = useCallback(() => {
+    setMeasurementText('この端末ではAR未対応/未実装です');
+  }, []);
+
   // ====== UI ======
   return (
     <div
       ref={containerRef}
       data-testid="measure-page-container"
-      onClick={handlePointerDown} // onPointerDownをonClickに変更
+      onClick={handlePointerDown} // onPointerDownをonClickに変更（意図: タップを1イベントで処理）
       style={{
         width: '100%',
         height: '100vh',
@@ -162,20 +204,26 @@ export default function MeasurePage() {
         // onPointerDown={handlePointerDown} // ここから削除
         width={window.innerWidth}
         height={window.innerHeight}
-        style={{ 
-          position: 'absolute', 
-          top: 0, 
-          left: 0, 
-          width: '100%', 
-          height: '100%', 
-          zIndex: 10, 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: 10,
           backgroundColor: 'transparent',
           pointerEvents: 'none', // canvasのポインターイベントを無効化
         }}
       />
 
-      {/* UIオーバーレイ */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
+      {/* UIオーバーレイ（上部: 計測表示・単位） */}
+      <div
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }}
+        data-ui-control="true"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <div
           data-testid="measurement-readout"
           aria-live="polite"
@@ -202,12 +250,26 @@ export default function MeasurePage() {
         </div>
       </div>
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
+      {/* 下部オーバーレイ（補正パネル + 操作ボタン） */}
+      <div
+        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }}
+        data-ui-control="true"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <div className="p-4">
           <MeasureCalibrationPanel />
         </div>
         <div className="p-4 flex justify-between">
-          <MeasureControlButtons />
+          <MeasureControlButtons
+            onStartARSession={handleStartARSession}
+            onToggleCameraFacingMode={handleToggleCameraFacingMode}
+            onCapturePhoto={handleCapturePhoto}
+            onPickPhoto={handlePickPhoto}
+            // 端末/ブラウザによっては true にできる場合あり。現状は無効扱いで渡す。
+            isArSupported={false}
+          />
           <button
             type="button"
             data-testid="reset-button"
@@ -219,8 +281,9 @@ export default function MeasurePage() {
         </div>
       </div>
 
-      {/* 非表示のファイル入力 */}
+      {/* 非表示のファイル入力（onPickPhoto で開く） */}
       <input
+        ref={fileInputRef}
         data-testid="hidden-file-input"
         type="file"
         accept="image/*"
@@ -236,9 +299,7 @@ export default function MeasurePage() {
           className="absolute inset-0 bg-black/40 flex items-center justify-center z-50"
         >
           <div className="bg-white p-4 rounded-lg shadow-xl">
-            <div>
-              スケール推定の信頼度: {Math.round((scaleDialog.confidence ?? 0) * 100)}%
-            </div>
+            <div>スケール推定の信頼度: {Math.round((scaleDialog.confidence ?? 0) * 100)}%</div>
           </div>
         </div>
       )}

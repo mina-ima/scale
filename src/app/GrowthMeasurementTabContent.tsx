@@ -39,11 +39,12 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
   const [scaleDialog, setScaleDialog] = useState<{ open: boolean; confidence: number | null }>({ open: false, confidence: null });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // 追加: 「写真を選ぶ」用
 
   // --- useMeasureStore --- 
   const { setMeasurement } = useMeasureStore();
 
-  // --- MeasurePageから移植したカメラ関連Effect ---
+  // --- カメラ関連Effect ---
   useEffect(() => {
     startCamera();
     return () => stopCamera();
@@ -51,11 +52,12 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
 
   useEffect(() => {
     if (videoRef.current && stream) {
+      // @ts-expect-error: srcObject はモダンブラウザで利用可
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
 
-  // --- MeasurePageから移植した測定ロジック ---
+  // --- 測定ロジック ---
   const clearAll = useCallback(() => {
     setPoints([]);
     setMeasurementText('');
@@ -86,6 +88,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         const px = distancePx(next[0], next[1]);
         const text = `${px.toFixed(0)} px（未校正）`;
         setMeasurementText(text);
+        // 成長記録モード側の store 更新（暫定: px→mm/cmの換算は別途補正で上書きされる想定）
         setMeasurement({ valueCm: px / 10, valueMm: px, dateISO: new Date().toISOString().split('T')[0] });
         drawMeasurementLine(ctx, next[0], next[1], { units });
         drawMeasurementLabel(ctx, next[0], next[1], text);
@@ -97,6 +100,7 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      // UIコントロール上のイベントは無視
       if ((e.target as HTMLElement).closest('[data-ui-control="true"]')) {
         return;
       }
@@ -115,12 +119,12 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
     if (!canvas || !video) return;
 
     const compositeCanvas = document.createElement('canvas');
-    compositeCanvas.width = video.videoWidth;
-    compositeCanvas.height = video.videoHeight;
+    compositeCanvas.width = video.videoWidth || window.innerWidth;
+    compositeCanvas.height = video.videoHeight || window.innerHeight;
     const ctx = compositeCanvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    ctx.drawImage(video, 0, 0, compositeCanvas.width, compositeCanvas.height);
     ctx.drawImage(canvas, 0, 0);
 
     compositeCanvas.toBlob(async (blob) => {
@@ -135,6 +139,59 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
       }
     });
   }, [points]);
+
+  // --- 画像入力→スケール推定（任意） ---
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const result = await estimateScale(file as any);
+        const confidence = (result as any)?.confidence ?? 0;
+        // ここではダイアログ表示のみ（必要なら store に mm/px を反映する処理へ拡張）
+        if (confidence >= 0.8) {
+          setScaleDialog({ open: true, confidence });
+        } else {
+          setScaleDialog({ open: false, confidence });
+        }
+      } finally {
+        e.target.value = '';
+      }
+    },
+    [],
+  );
+
+  // --- MeasureControlButtons 用のハンドラ（配線） ---
+  const handlePickPhoto = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleCapturePhoto = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const w = video.videoWidth || window.innerWidth;
+    const h = video.videoHeight || window.innerHeight;
+
+    const off = document.createElement('canvas');
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
+
+    setMeasurementText('写真を取り込みました');
+    // 必要なら off.toBlob(...) → 推定/保存へ
+  }, []);
+
+  const handleToggleCameraFacingMode = useCallback(() => {
+    setMeasurementText('カメラ切替（暫定）');
+    // TODO: useCamera に facingMode 切替APIがあれば置換
+  }, []);
+
+  const handleStartARSession = useCallback(() => {
+    setMeasurementText('この端末ではAR未対応/未実装です');
+  }, []);
 
   return (
     <div
@@ -155,8 +212,14 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         className="absolute top-0 left-0 w-full h-full z-10 bg-transparent pointer-events-none"
       />
 
-      {/* UIオーバーレイ */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
+      {/* UIオーバーレイ（上部: 計測表示・単位） */}
+      <div
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }}
+        data-ui-control="true"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <div className="bg-black/50 text-white p-2 rounded-md m-2 inline-block">
           {measurementText || 'タップして計測を開始'}
         </div>
@@ -173,13 +236,27 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
         </div>
       </div>
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
+      {/* 下部オーバーレイ（補正パネル + 操作ボタン + 保存） */}
+      <div
+        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }}
+        data-ui-control="true"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <div className="p-4">
           <MeasureCalibrationPanel />
         </div>
         <div className="p-4 flex justify-around items-center">
-          <MeasureControlButtons />
-          {/* 保存ボタン */}
+          <MeasureControlButtons
+            onStartARSession={handleStartARSession}
+            onToggleCameraFacingMode={handleToggleCameraFacingMode}
+            onCapturePhoto={handleCapturePhoto}
+            onPickPhoto={handlePickPhoto}
+            isArSupported={false}
+          />
+
+          {/* 保存ボタン群 */}
           <button
             onClick={() => composeAndSaveImage('shinchou')}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-lg hover:bg-blue-600 disabled:bg-gray-400"
@@ -209,6 +286,28 @@ const GrowthMeasurementTabContent: React.FC<GrowthMeasurementTabContentProps> = 
           </button>
         </div>
       </div>
+
+      {/* 非表示のファイル入力（MeasureControlButtons → onPickPhoto で開く） */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+
+      {/* スケール推定ダイアログ（任意表示） */}
+      {scaleDialog.open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="absolute inset-0 bg-black/40 flex items-center justify-center z-50"
+        >
+          <div className="bg-white p-4 rounded-lg shadow-xl">
+            <div>スケール推定の信頼度: {Math.round((scaleDialog.confidence ?? 0) * 100)}%</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
