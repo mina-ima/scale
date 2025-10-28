@@ -22,7 +22,8 @@ function distancePx(a: Point, b: Point) {
 }
 
 export default function MeasurePage() {
-  const { stream, startCamera, stopCamera } = useCamera();
+  // toggleCameraFacingMode を使用（カメラ切替）
+  const { stream, startCamera, stopCamera, toggleCameraFacingMode } = useCamera() as any;
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const [points, setPoints] = useState<Point[]>([]);
@@ -36,6 +37,7 @@ export default function MeasurePage() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); // 「写真を選ぶ」用
 
   // --- DPR対応: キャンバス内部サイズをCSS×DPRの整数に ---
   const resizeCanvasToContainer = useCallback(() => {
@@ -65,6 +67,7 @@ export default function MeasurePage() {
 
   useEffect(() => {
     if (videoRef.current && stream) {
+      // @ts-expect-error: srcObject はモダンブラウザで利用可
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
@@ -75,6 +78,34 @@ export default function MeasurePage() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [resizeCanvasToContainer]);
+
+  // ====== cover描画（静止画を可視キャンバスへ） ======
+  const drawCoverToCanvas = useCallback(
+    (src: CanvasImageSource, srcW: number, srcH: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const destW = canvas.width;
+      const destH = canvas.height;
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true } as any);
+      if (!ctx) return;
+
+      const scale = Math.max(destW / srcW, destH / srcH);
+      const drawW = Math.max(1, Math.round(srcW * scale));
+      const drawH = Math.max(1, Math.round(srcH * scale));
+      const dx = Math.round((destW - drawW) / 2);
+      const dy = Math.round((destH - drawH) / 2);
+
+      ctx.clearRect(0, 0, destW, destH);
+      ctx.drawImage(src, dx, dy, drawW, drawH);
+
+      // 背景を静止画にしたので、測定はクリアしてメッセージ更新
+      setPoints([]);
+      setMeasurementText('画像を表示しました。2点をタップして計測してください。');
+    },
+    []
+  );
 
   const clearAll = useCallback(() => {
     setPoints([]);
@@ -132,12 +163,64 @@ export default function MeasurePage() {
     [doTap],
   );
 
+  // ====== ボタン用ハンドラ ======
+  const onCapturePhoto = useCallback(() => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth || !v.videoHeight) {
+      setMeasurementText('カメラ準備中です');
+      return;
+    }
+    drawCoverToCanvas(v, v.videoWidth, v.videoHeight);
+    setMeasurementText('写真を取り込みました。2点をタップして計測してください。');
+  }, [drawCoverToCanvas]);
+
+  const onPickPhoto = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onPhotoSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        drawCoverToCanvas(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        setMeasurementText('画像の読み込みに失敗しました');
+      };
+      img.src = url;
+
+      // 参考: スケール推定（画面反映には影響させない）
+      // ファイル版の推定APIを使っている場合はここで実行
+      const result = await estimateScale([] as any, [] as any).catch(() => null);
+      void result;
+    } finally {
+      e.target.value = '';
+    }
+  }, [drawCoverToCanvas]);
+
+  const onToggleCameraFacingMode = useCallback(() => {
+    if (typeof toggleCameraFacingMode === 'function') {
+      toggleCameraFacingMode();
+    } else {
+      setMeasurementText('カメラ切替APIが未提供です');
+    }
+  }, [toggleCameraFacingMode]);
+
+  const onStartARSession = useCallback(() => {
+    setMeasurementText('この端末ではAR未対応/未実装です');
+  }, []);
+
+  // ====== ファイル選択でのスケール推定（従来のハンドラは残すが UI 反映は上のonPhotoSelectedで行う） ======
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       try {
-        // ここは既存の推定APIを尊重（内部でgetImageDataを使う場合でもDPR化済みキャンバスが前提になる）
         const result = await estimateScale(file as any);
         const confidence = (result as any)?.confidence ?? 0;
         if (confidence >= 0.8) {
@@ -195,7 +278,13 @@ export default function MeasurePage() {
       />
 
       {/* UIオーバーレイ */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
+      <div
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }}
+        data-ui-control="true"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <div
           data-testid="measurement-readout"
           aria-live="polite"
@@ -222,13 +311,24 @@ export default function MeasurePage() {
         </div>
       </div>
 
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }} data-ui-control="true">
+      <div
+        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }}
+        data-ui-control="true"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+      >
         <div className="p-4">
-          {/* MeasureCalibrationPanel はprops無し版を使っている想定 */}
           <MeasureCalibrationPanel />
         </div>
         <div className="p-4 flex justify-between">
-          <MeasureControlButtons />
+          <MeasureControlButtons
+            onStartARSession={onStartARSession}
+            onToggleCameraFacingMode={onToggleCameraFacingMode}
+            onCapturePhoto={onCapturePhoto}
+            onPickPhoto={onPickPhoto}
+            isArSupported={false}
+          />
           <button
             type="button"
             data-testid="reset-button"
@@ -240,13 +340,18 @@ export default function MeasurePage() {
         </div>
       </div>
 
-      {/* 非表示のファイル入力 */}
+      {/* 非表示のファイル入力（画面反映: onPhotoSelected / 推定UI: handleFileChange） */}
       <input
+        ref={fileInputRef}
         data-testid="hidden-file-input"
         type="file"
         accept="image/*"
         style={{ display: 'none' }}
-        onChange={handleFileChange}
+        onChange={(e) => {
+          onPhotoSelected(e);
+          // スケール推定ダイアログも使いたい場合は下の行を残す
+          handleFileChange(e);
+        }}
       />
 
       {scaleDialog.open && (

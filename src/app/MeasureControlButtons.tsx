@@ -1,28 +1,34 @@
 import React from 'react';
 import { useMeasureStore } from '../store/measureStore';
 
+type Fn = () => void;
+
 interface MeasureControlButtonsProps {
-  onStartARSession: () => void;
-  onToggleCameraFacingMode: () => void;
-  onCapturePhoto: () => void;
-  onPickPhoto: () => void;
-  isArSupported: boolean;
+  onStartARSession?: Fn;
+  onToggleCameraFacingMode?: Fn;
+  onCapturePhoto?: Fn;
+  onPickPhoto?: Fn;
+  isArSupported?: boolean;
 }
 
+const noop = () => {};
+
 const MeasureControlButtons: React.FC<MeasureControlButtonsProps> = ({
-  onStartARSession,
-  onToggleCameraFacingMode,
-  onCapturePhoto,
-  onPickPhoto,
-  isArSupported,
+  onStartARSession = noop,
+  onToggleCameraFacingMode = noop,
+  onCapturePhoto = noop,
+  onPickPhoto = noop,
+  isArSupported = false,
 }) => {
   const {
     isArMode,
     error,
     isWebXrSupported,
-    facingMode,
+    // facingMode, // 未使用のためコメントアウト
     clearPoints,
   } = useMeasureStore();
+
+  const canUseAr = isWebXrSupported && isArSupported;
 
   return (
     <div
@@ -37,13 +43,15 @@ const MeasureControlButtons: React.FC<MeasureControlButtonsProps> = ({
         {/* AR開始（対応時） */}
         {!isArMode && !error && (
           <button
-            className={`px-3 py-2 rounded text-white ${isWebXrSupported && isArSupported ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
+            className={`px-3 py-2 rounded text-white ${
+              canUseAr ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'
+            }`}
             onClick={(e) => {
               e.stopPropagation();
-              if (isWebXrSupported && isArSupported) onStartARSession();
+              if (canUseAr) onStartARSession();
             }}
-            disabled={!isWebXrSupported || !isArSupported}
-            title={(!isWebXrSupported || !isArSupported) ? 'この端末ではWebXR ARを利用できません' : 'AR計測を開始'}
+            disabled={!canUseAr}
+            title={canUseAr ? 'AR計測を開始' : 'この端末ではWebXR ARを利用できません'}
           >
             AR計測を開始
           </button>
