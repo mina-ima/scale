@@ -3,9 +3,21 @@ import { ReferenceObject } from './ReferenceObject';
 
 export interface ScaleEstimation {
   mmPerPx: number;
-  confidence: number; // 0 to 1, higher is better
+  confidence: number; // 0..1
   matchedReferenceObject: ReferenceObject | null;
   matchedDetectedRectangle: DetectedRectangle | null;
+}
+
+// --- Safety helpers ---
+function isPositiveFinite(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && n > 0;
+}
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
 }
 
 export const estimateScale = (
@@ -19,40 +31,68 @@ export const estimateScale = (
     matchedDetectedRectangle: null,
   };
 
+  // 入力が空なら既定の空結果
   if (detectedRectangles.length === 0 || referenceObjects.length === 0) {
     return bestResult;
   }
 
   for (const detectedRect of detectedRectangles) {
+    // 検出矩形の基本チェック
+    if (
+      !isPositiveFinite(detectedRect.width) ||
+      !isPositiveFinite(detectedRect.height)
+    ) {
+      continue;
+    }
+
     for (const refObject of referenceObjects) {
-      // Calculate scale based on width and height
+      // 参照物の基本チェック
+      if (
+        !isPositiveFinite(refObject.widthMm) ||
+        !isPositiveFinite(refObject.heightMm)
+      ) {
+        continue;
+      }
+
+      // === スケール推定 ===
       const scaleX = refObject.widthMm / detectedRect.width;
       const scaleY = refObject.heightMm / detectedRect.height;
 
-      // Calculate aspect ratio match confidence
+      if (!isPositiveFinite(scaleX) || !isPositiveFinite(scaleY)) {
+        continue; // ゼロ割/非数は不採用
+      }
+
+      // === アスペクト比 ===
       const refAspectRatio = refObject.widthMm / refObject.heightMm;
       const detectedAspectRatio = detectedRect.width / detectedRect.height;
+      if (!isPositiveFinite(refAspectRatio) || !isPositiveFinite(detectedAspectRatio)) {
+        continue;
+      }
 
-      // How close are the aspect ratios?
       const aspectRatioDiff = Math.abs(refAspectRatio - detectedAspectRatio);
-      const aspectRatioConfidence =
-        1 - aspectRatioDiff / Math.max(refAspectRatio, detectedAspectRatio);
+      const aspectRatioDen = Math.max(refAspectRatio, detectedAspectRatio);
+      const aspectRatioConfidence = clamp01(1 - aspectRatioDiff / aspectRatioDen);
 
-      // How close are scaleX and scaleY?
+      // === スケール一貫性 ===
       const scaleDiff = Math.abs(scaleX - scaleY);
-      const scaleConsistencyConfidence =
-        1 - scaleDiff / Math.max(scaleX, scaleY);
+      const scaleDen = Math.max(scaleX, scaleY);
+      const scaleConsistencyConfidence = clamp01(1 - scaleDiff / scaleDen);
 
-      // Combine confidences (simple average for now)
-      // We also need to consider the overall scale value. If scaleX or scaleY is very small or very large, it might be a bad match.
-      // For now, let's focus on aspect ratio and scale consistency.
-      const currentConfidence =
-        (aspectRatioConfidence + scaleConsistencyConfidence) / 2;
+      // === 信頼度（単純平均、0..1へクランプ） ===
+      const currentConfidence = clamp01(
+        (aspectRatioConfidence + scaleConsistencyConfidence) / 2
+      );
 
-      // If this is a better match, update bestResult
+      // === mmPerPx（正規化 & チェック） ===
+      const mmPerPx = (scaleX + scaleY) / 2;
+      if (!isPositiveFinite(mmPerPx)) {
+        continue;
+      }
+
+      // より良い一致なら採用
       if (currentConfidence > bestResult.confidence) {
         bestResult = {
-          mmPerPx: (scaleX + scaleY) / 2, // Average scale
+          mmPerPx,
           confidence: currentConfidence,
           matchedReferenceObject: refObject,
           matchedDetectedRectangle: detectedRect,
@@ -63,13 +103,14 @@ export const estimateScale = (
 
   return bestResult;
 };
-export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7; // Example threshold
+
+export const DEFAULT_CONFIDENCE_THRESHOLD = 0.7; // 既定しきい値
 
 export const shouldConfirmScaleEstimation = (
   result: ScaleEstimation,
   threshold: number = DEFAULT_CONFIDENCE_THRESHOLD
 ): boolean => {
-  // Placeholder implementation
+  // 単純基準：信頼度がしきい値未満ならユーザー確認
   return result.confidence < threshold;
 };
 
@@ -86,5 +127,5 @@ export const getScaleEstimationHint = (
   } else if (result.mmPerPx === 0) {
     return 'スケールを推定できませんでした。基準物を画面内に収めてください。';
   }
-  return ''; // No hint needed if confident and valid
+  return ''; // 問題なし
 };
