@@ -10,10 +10,8 @@ import {
   drawMeasurementPoint,
 } from '../core/render/drawMeasurement';
 
-// 4点補正/等倍率の状態とポイント追加（Zustand）
+// 補正状態（selectionMode）と補正点の追加、スケール(mmPerPx)を参照
 import { useMeasureStore } from '../store/measureStore';
-// 平面補正後の距離算出ユーティリティ（mmで返る）
-import { distanceWithHomography, isValidHomography } from '../core/geometry/homography';
 
 type Point = { x: number; y: number };
 type Units = 'cm' | 'mm' | 'inch';
@@ -24,13 +22,13 @@ function distancePx(a: Point, b: Point) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function formatMmToUnit(mm: number, units: Units): { value: number; label: string } {
-  if (!Number.isFinite(mm)) return { value: NaN, label: 'NaN' };
+function formatMmToUnit(mm: number, units: Units): string {
+  if (!Number.isFinite(mm)) return 'NaN';
   switch (units) {
-    case 'mm': return { value: mm, label: `${mm.toFixed(1)} mm` };
-    case 'cm': return { value: mm / 10, label: `${(mm / 10).toFixed(2)} cm` };
-    case 'inch': return { value: mm / 25.4, label: `${(mm / 25.4).toFixed(3)} in` };
-    default: return { value: mm, label: `${mm.toFixed(1)} mm` };
+    case 'mm':   return `${mm.toFixed(1)} mm`;
+    case 'cm':   return `${(mm / 10).toFixed(2)} cm`;
+    case 'inch': return `${(mm / 25.4).toFixed(3)} in`;
+    default:     return `${mm.toFixed(1)} mm`;
   }
 }
 
@@ -47,11 +45,13 @@ export default function MeasurePage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null); // 「写真を選ぶ」用
 
-  // ストアから各種状態を取得
-  const selectionMode = useMeasureStore((s: any) => s.selectionMode);
+  // ストアから補正状態とスケールを購読
+  const selectionMode = useMeasureStore((s: any) => s.selectionMode); // 'measure' | 'calibrate-two' | 'calibrate-plane' などを想定
   const addPointToStore = useMeasureStore((s: any) => s.addPoint);
-  const homography = useMeasureStore((s: any) => s.homography);
-  const scale = useMeasureStore((s: any) => s.scale); // { mmPerPx } が入る
+  // mmPerPx は s.mmPerPx or s.scale.mmPerPx のどちらでも拾う
+  const mmPerPx = useMeasureStore((s: any) =>
+    typeof s?.mmPerPx === 'number' ? s.mmPerPx : s?.scale?.mmPerPx
+  ) as number | undefined;
 
   // --- DPR対応: キャンバス内部サイズをCSS×DPRの整数に ---
   const resizeCanvasToContainer = useCallback(() => {
@@ -70,8 +70,8 @@ export default function MeasurePage() {
     }
 
     // CSSはそのまま100%
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
+    (canvas.style as any).width = '100%';
+    (canvas.style as any).height = '100%';
   }, []);
 
   // カメラ開始/停止
@@ -119,7 +119,7 @@ export default function MeasurePage() {
 
       // 背景を静止画にしたので、測定はクリア
       setPoints([]);
-      setMeasurementText('画像を表示しました。2点をタップして計測、または「4点補正」を開始してください。');
+      setMeasurementText('画像を表示しました。補正ポイントを指定して「適用」→その後に計測してください。');
     },
     []
   );
@@ -148,31 +148,35 @@ export default function MeasurePage() {
     if (!ctx || !canvasRef.current) return;
 
     setPoints((prev) => {
-      // ★ 4点補正モード中は「消去しない＆最大4点保持」
+      // === 補正モード：クリックは補正ポイント収集のみ ===
       if (selectionMode === 'calibrate-plane') {
         const next = [...prev, p].slice(-4);
-
         drawMeasurementPoint(ctx, p);
-
-        try {
-          if (typeof addPointToStore === 'function') {
-            addPointToStore(p);
-          }
-        } catch {
-          // noop
+        if (typeof addPointToStore === 'function') {
+          try { addPointToStore(p); } catch {}
         }
-
         const n = next.length;
-        if (n < 4) {
-          setMeasurementText(`補正ポイント ${n}/4：続けてタップしてください`);
-        } else {
-          setMeasurementText('4/4 点が選択されました。「適用」を押してください');
-        }
+        setMeasurementText(n < 4 ? `補正ポイント（4点） ${n}/4：続けてタップ` : '4/4 点が選択されました。「適用」を押してください');
         return next;
       }
 
-      // 通常の2点計測：3点目で「画像まで消さない」ため、ここでは背景消去ではなくオーバーレイをリセットし新規1点目から
+      if (selectionMode === 'calibrate-two') {
+        const next = [...prev, p].slice(-2);
+        drawMeasurementPoint(ctx, p);
+        if (typeof addPointToStore === 'function') {
+          try { addPointToStore(p); } catch {}
+        }
+        const n = next.length;
+        setMeasurementText(n < 2 ? `補正ポイント（2点） ${n}/2：続けてタップ` : '2/2 点が選択されました。基準を選んで「適用」してください');
+        return next;
+      }
+
+      // === 計測モード ===
+      // 3点目でリセット（背景は維持）、新しい1点目から
       if (prev.length >= 2) {
+        const w = canvasRef.current!.width, h = canvasRef.current!.height;
+        const imageData = ctx.getImageData(0, 0, w, h); // 背景が video の場合はこの方法だと消えるため、必要に応じて二層化を検討
+        ctx.putImageData(imageData, 0, 0); // ここでは背景を維持する前提（静止画が貼られているケースを想定）
         ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
         drawMeasurementPoint(ctx, p);
         setMeasurementText('');
@@ -182,38 +186,29 @@ export default function MeasurePage() {
       const next = [...prev, p];
       drawMeasurementPoint(ctx, p);
 
-      // 2点そろったら距離を算出して表示
       if (next.length === 2) {
         const [a, b] = next;
-        let label = '';
-        // 優先1: 4点補正（ホモグラフィ）→ mm
-        if (isValidHomography(homography)) {
-          const mm = distanceWithHomography(homography, a, b);
-          const { label: text } = formatMmToUnit(mm, units);
-          label = text;
-        }
-        // 優先2: 等倍率（mm/px）→ mm
-        else if (scale && typeof (scale as any).mmPerPx === 'number') {
-          const mmPerPx = (scale as any).mmPerPx as number;
-          const px = distancePx(a, b);
-          const mm = px * mmPerPx;
-          const { label: text } = formatMmToUnit(mm, units);
-          label = text;
-        }
-        // どちらも無ければ px（未校正）
-        else {
-          const px = distancePx(a, b);
-          label = `${px.toFixed(0)} px（未校正）`;
-        }
+        const px = distancePx(a, b);
 
-        setMeasurementText(label);
-        drawMeasurementLine(ctx, a, b, { units } as any);
-        drawMeasurementLabel(ctx, a, b, label);
+        // mmPerPx が設定済み（＝補正適用済み）なら実寸表示
+        if (typeof mmPerPx === 'number' && Number.isFinite(mmPerPx) && mmPerPx > 0) {
+          const mm = px * mmPerPx;
+          const label = formatMmToUnit(mm, units);
+          setMeasurementText(label);
+          drawMeasurementLine(ctx, a, b, { units } as any);
+          drawMeasurementLabel(ctx, a, b, label);
+        } else {
+          // 未補正なら px（未校正）
+          const label = `${px.toFixed(0)} px（未校正）`;
+          setMeasurementText(label);
+          drawMeasurementLine(ctx, a, b, { units } as any);
+          drawMeasurementLabel(ctx, a, b, label);
+        }
       }
 
       return next;
     });
-  }, [toInternalPoint, units, selectionMode, addPointToStore, homography, scale]);
+  }, [toInternalPoint, units, selectionMode, addPointToStore, mmPerPx]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -232,7 +227,7 @@ export default function MeasurePage() {
       return;
     }
     drawCoverToCanvas(v, v.videoWidth, v.videoHeight);
-    setMeasurementText('写真を取り込みました。2点計測または「4点補正」を行ってください。');
+    setMeasurementText('写真を取り込みました。補正ポイントを指定→「適用」後に計測してください。');
   }, [drawCoverToCanvas]);
 
   const onPickPhoto = useCallback(() => {
@@ -243,11 +238,12 @@ export default function MeasurePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 画面に確実に反映
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      drawCoverToCanvas(img, (img as HTMLImageElement).naturalWidth || (img as HTMLImageElement).width, (img as HTMLImageElement).naturalHeight || (img as HTMLImageElement).height);
+      const w = (img as HTMLImageElement).naturalWidth || (img as HTMLImageElement).width;
+      const h = (img as HTMLImageElement).naturalHeight || (img as HTMLImageElement).height;
+      drawCoverToCanvas(img, w, h);
       URL.revokeObjectURL(url);
     };
     img.onerror = () => {
@@ -299,7 +295,12 @@ export default function MeasurePage() {
         onTouchStart={(e) => e.stopPropagation()}
       >
         <div data-testid="measurement-readout" aria-live="polite" className="bg-black/50 text-white p-2 rounded-md m-2 inline-block">
-          {measurementText || (selectionMode === 'calibrate-plane' ? '補正ポイントを4点タップしてください' : 'タップして計測を開始')}
+          {measurementText ||
+            (selectionMode === 'calibrate-plane'
+              ? '補正ポイント（4点）を指定→基準を選んで「適用」'
+              : selectionMode === 'calibrate-two'
+              ? '補正ポイント（2点）を指定→基準を選んで「適用」'
+              : '（計測）2点をタップ')}
         </div>
 
         <div className="absolute top-2 right-2">
@@ -310,7 +311,7 @@ export default function MeasurePage() {
             value={units}
             onChange={(e) => setUnits(e.target.value as Units)}
             className="bg-black/50 text-white p-2 rounded-md"
-            disabled={selectionMode === 'calibrate-plane'} // 補正中は単位変更をロック（任意）
+            disabled={selectionMode === 'calibrate-plane' || selectionMode === 'calibrate-two'} // 補正中は単位変更をロック
           >
             <option value="cm">cm</option>
             <option value="mm">mm</option>
@@ -343,7 +344,7 @@ export default function MeasurePage() {
             data-testid="reset-button"
             onClick={clearAll}
             className="bg-red-500/80 text-white p-3 rounded-full shadow-lg"
-            disabled={selectionMode === 'calibrate-plane'} // 補正中は誤タップ防止でリセット無効（任意）
+            disabled={selectionMode === 'calibrate-plane' || selectionMode === 'calibrate-two'} // 補正中は誤タップ防止
           >
             Reset
           </button>
