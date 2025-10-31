@@ -41,7 +41,8 @@ export type ErrorState = {
 export type Homography = [number, number, number, number, number, number, number, number, number];
 
 // ★ 追加: クリック挙動を切り替えるモード
-export type SelectionMode = 'measure' | 'calibrate-plane';
+export type SelectionMode = 'measure' | 'calibrate-two' | 'calibrate-plane';
+
 
 // ★ 追加: 補正方法の選択モード
 export type CalibrationMode = 'length' | 'plane';

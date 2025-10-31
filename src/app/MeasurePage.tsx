@@ -10,11 +10,13 @@ import {
   drawMeasurementPoint,
 } from '../core/render/drawMeasurement';
 
-// 補正状態（selectionMode）と補正点の追加、スケール(mmPerPx)を参照
 import { useMeasureStore } from '../store/measureStore';
 
 type Point = { x: number; y: number };
 type Units = 'cm' | 'mm' | 'inch';
+
+// 背景静止画の原寸キャッシュ
+type CoverCache = { offscreen: HTMLCanvasElement };
 
 function distancePx(a: Point, b: Point) {
   const dx = b.x - a.x;
@@ -33,7 +35,6 @@ function formatMmToUnit(mm: number, units: Units): string {
 }
 
 export default function MeasurePage() {
-  // カメラ切替も利用
   const { stream, startCamera, stopCamera, toggleCameraFacingMode } = useCamera() as any;
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -43,35 +44,33 @@ export default function MeasurePage() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null); // 「写真を選ぶ」用
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ストアから補正状態とスケールを購読
-  const selectionMode = useMeasureStore((s: any) => s.selectionMode); // 'measure' | 'calibrate-two' | 'calibrate-plane' などを想定
+  // ストア
+  const selectionMode = useMeasureStore((s: any) => s.selectionMode);  // 'measure' | 'calibrate-two' | 'calibrate-plane'
   const addPointToStore = useMeasureStore((s: any) => s.addPoint);
-  // mmPerPx は s.mmPerPx or s.scale.mmPerPx のどちらでも拾う
   const mmPerPx = useMeasureStore((s: any) =>
     typeof s?.mmPerPx === 'number' ? s.mmPerPx : s?.scale?.mmPerPx
   ) as number | undefined;
 
-  // --- DPR対応: キャンバス内部サイズをCSS×DPRの整数に ---
+  // 背景キャッシュ（リセット押下まで維持）
+  const coverCacheRef = useRef<CoverCache | null>(null);
+
+  // DPR対応
   const resizeCanvasToContainer = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
-
     const rect = container.getBoundingClientRect();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.round(rect.width * dpr));
     const h = Math.max(1, Math.round(rect.height * dpr));
-
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
     }
-
-    // CSSはそのまま100%
-    (canvas.style as any).width = '100%';
-    (canvas.style as any).height = '100%';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
   }, []);
 
   // カメラ開始/停止
@@ -80,117 +79,131 @@ export default function MeasurePage() {
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
-  // ストリームをvideoへ
+  // video へ stream
   useEffect(() => {
     if (videoRef.current && stream) {
-      // @ts-expect-error: srcObject はモダンブラウザで利用可
+      // @ts-expect-error
       (videoRef.current as any).srcObject = stream;
     }
   }, [stream]);
 
-  // リサイズに追随
+  // リサイズ時に背景を再描画
   useEffect(() => {
     resizeCanvasToContainer();
-    const onResize = () => resizeCanvasToContainer();
+    const onResize = () => {
+      resizeCanvasToContainer();
+      const ctx = canvasRef.current?.getContext('2d', { willReadFrequently: true } as any);
+      if (ctx) repaintBase(ctx);
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [resizeCanvasToContainer]);
 
-  // ====== cover描画（静止画を可視キャンバスへ） ======
-  const drawCoverToCanvas = useCallback(
-    (src: CanvasImageSource, srcW: number, srcH: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+  // 背景の再描画
+  const repaintBase = useCallback((ctx: CanvasRenderingContext2D) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const destW = canvas.width;
+    const destH = canvas.height;
+    ctx.clearRect(0, 0, destW, destH);
 
-      const destW = canvas.width;
-      const destH = canvas.height;
+    const cache = coverCacheRef.current;
+    if (!cache) return; // 背景未設定（背後の video が見える）
 
-      const ctx = canvas.getContext('2d', { willReadFrequently: true } as any);
-      if (!ctx) return;
+    const srcW = cache.offscreen.width;
+    const srcH = cache.offscreen.height;
+    const scale = Math.max(destW / srcW, destH / srcH);
+    const drawW = Math.max(1, Math.round(srcW * scale));
+    const drawH = Math.max(1, Math.round(srcH * scale));
+    const dx = Math.round((destW - drawW) / 2);
+    const dy = Math.round((destH - drawH) / 2);
+    ctx.drawImage(cache.offscreen, dx, dy, drawW, drawH);
+  }, []);
 
-      const scale = Math.max(destW / srcW, destH / srcH);
-      const drawW = Math.max(1, Math.round(srcW * scale));
-      const drawH = Math.max(1, Math.round(srcH * scale));
-      const dx = Math.round((destW - drawW) / 2);
-      const dy = Math.round((destH - drawH) / 2);
+  // 静止画を表示＆キャッシュ
+  const drawCoverToCanvas = useCallback((src: CanvasImageSource, srcW: number, srcH: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true } as any);
+    if (!ctx) return;
 
-      ctx.clearRect(0, 0, destW, destH);
-      ctx.drawImage(src, dx, dy, drawW, drawH);
+    // 原寸をオフスクリーンに保持
+    const off = document.createElement('canvas');
+    off.width = Math.max(1, Math.round(srcW));
+    off.height = Math.max(1, Math.round(srcH));
+    const offCtx = off.getContext('2d');
+    offCtx?.drawImage(src, 0, 0, off.width, off.height);
+    coverCacheRef.current = { offscreen: off };
 
-      // 背景を静止画にしたので、測定はクリア
-      setPoints([]);
-      setMeasurementText('画像を表示しました。補正ポイントを指定して「適用」→その後に計測してください。');
-    },
-    []
-  );
+    // 表示
+    repaintBase(ctx);
+
+    // ガイダンス
+    setPoints([]);
+    setMeasurementText('画像を表示しました。補正ポイントを指定して「適用」→その後に計測してください。');
+  }, [repaintBase]);
 
   const clearAll = useCallback(() => {
     setPoints([]);
     setMeasurementText('');
+    coverCacheRef.current = null; // 背景も明示的に破棄（ユーザー操作のみ）
     const ctx = canvasRef.current?.getContext('2d');
     if (ctx && canvasRef.current) {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     }
   }, []);
 
-  // CSS→内部ピクセル座標に変換（DPRスケーリング＆整数化）
+  // CSS座標→内部座標
   const toInternalPoint = useCallback((clientX: number, clientY: number, currentTarget: HTMLElement | null): Point => {
     const rect = currentTarget?.getBoundingClientRect?.() ?? { left: 0, top: 0, width: 1, height: 1 };
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const xCss = clientX - rect.left;
-    const yCss = clientY - rect.top;
-    return { x: Math.round(xCss * dpr), y: Math.round(yCss * dpr) };
+    return { x: Math.round((clientX - rect.left) * dpr), y: Math.round((clientY - rect.top) * dpr) };
   }, []);
 
+  // クリック処理
   const doTap = useCallback((clientX: number, clientY: number, currentTarget: HTMLElement | null) => {
     const p = toInternalPoint(clientX, clientY, currentTarget);
     const ctx = canvasRef.current?.getContext('2d', { willReadFrequently: true } as any);
     if (!ctx || !canvasRef.current) return;
 
     setPoints((prev) => {
-      // === 補正モード：クリックは補正ポイント収集のみ ===
+      // === 補正モード：点を収集するだけ ===
       if (selectionMode === 'calibrate-plane') {
         const next = [...prev, p].slice(-4);
-        drawMeasurementPoint(ctx, p);
-        if (typeof addPointToStore === 'function') {
-          try { addPointToStore(p); } catch {}
-        }
+        repaintBase(ctx);
+        next.forEach(pt => drawMeasurementPoint(ctx, pt));
+        try { if (typeof addPointToStore === 'function') addPointToStore(p); } catch {}
         const n = next.length;
         setMeasurementText(n < 4 ? `補正ポイント（4点） ${n}/4：続けてタップ` : '4/4 点が選択されました。「適用」を押してください');
         return next;
       }
-
       if (selectionMode === 'calibrate-two') {
         const next = [...prev, p].slice(-2);
-        drawMeasurementPoint(ctx, p);
-        if (typeof addPointToStore === 'function') {
-          try { addPointToStore(p); } catch {}
-        }
+        repaintBase(ctx);
+        next.forEach(pt => drawMeasurementPoint(ctx, pt));
+        try { if (typeof addPointToStore === 'function') addPointToStore(p); } catch {}
         const n = next.length;
         setMeasurementText(n < 2 ? `補正ポイント（2点） ${n}/2：続けてタップ` : '2/2 点が選択されました。基準を選んで「適用」してください');
         return next;
       }
 
-      // === 計測モード ===
-      // 3点目でリセット（背景は維持）、新しい1点目から
+      // === 測定モード ===
       if (prev.length >= 2) {
-        const w = canvasRef.current!.width, h = canvasRef.current!.height;
-        const imageData = ctx.getImageData(0, 0, w, h); // 背景が video の場合はこの方法だと消えるため、必要に応じて二層化を検討
-        ctx.putImageData(imageData, 0, 0); // ここでは背景を維持する前提（静止画が貼られているケースを想定）
-        ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
+        // 背景を保持したまま、オーバーレイだけリセット
+        repaintBase(ctx);
         drawMeasurementPoint(ctx, p);
         setMeasurementText('');
         return [p];
       }
 
       const next = [...prev, p];
-      drawMeasurementPoint(ctx, p);
+      repaintBase(ctx);
+      next.forEach(pt => drawMeasurementPoint(ctx, pt));
 
       if (next.length === 2) {
         const [a, b] = next;
         const px = distancePx(a, b);
 
-        // mmPerPx が設定済み（＝補正適用済み）なら実寸表示
         if (typeof mmPerPx === 'number' && Number.isFinite(mmPerPx) && mmPerPx > 0) {
           const mm = px * mmPerPx;
           const label = formatMmToUnit(mm, units);
@@ -198,7 +211,6 @@ export default function MeasurePage() {
           drawMeasurementLine(ctx, a, b, { units } as any);
           drawMeasurementLabel(ctx, a, b, label);
         } else {
-          // 未補正なら px（未校正）
           const label = `${px.toFixed(0)} px（未校正）`;
           setMeasurementText(label);
           drawMeasurementLine(ctx, a, b, { units } as any);
@@ -208,18 +220,14 @@ export default function MeasurePage() {
 
       return next;
     });
-  }, [toInternalPoint, units, selectionMode, addPointToStore, mmPerPx]);
+  }, [toInternalPoint, units, selectionMode, addPointToStore, mmPerPx, repaintBase]);
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      // UI上のクリックは拾わない
-      if ((e.target as HTMLElement).closest('[data-ui-control="true"]')) return;
-      doTap(e.clientX, e.clientY, e.currentTarget as HTMLElement);
-    },
-    [doTap],
-  );
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('[data-ui-control="true"]')) return; // UIは除外
+    doTap(e.clientX, e.clientY, e.currentTarget as HTMLElement);
+  }, [doTap]);
 
-  // ====== ボタン用ハンドラ ======
+  // ボタン群
   const onCapturePhoto = useCallback(() => {
     const v = videoRef.current;
     if (!v || !v.videoWidth || !v.videoHeight) {
@@ -230,14 +238,11 @@ export default function MeasurePage() {
     setMeasurementText('写真を取り込みました。補正ポイントを指定→「適用」後に計測してください。');
   }, [drawCoverToCanvas]);
 
-  const onPickPhoto = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
+  const onPickPhoto = useCallback(() => fileInputRef.current?.click(), []);
 
   const onPhotoSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
@@ -251,17 +256,12 @@ export default function MeasurePage() {
       setMeasurementText('画像の読み込みに失敗しました');
     };
     img.src = url;
-
-    // 入力クリア
     e.target.value = '';
   }, [drawCoverToCanvas]);
 
   const onToggleCameraFacingMode = useCallback(() => {
-    if (typeof toggleCameraFacingMode === 'function') {
-      toggleCameraFacingMode();
-    } else {
-      setMeasurementText('カメラ切替APIが未提供です');
-    }
+    if (typeof toggleCameraFacingMode === 'function') toggleCameraFacingMode();
+    else setMeasurementText('カメラ切替APIが未提供です');
   }, [toggleCameraFacingMode]);
 
   const onStartARSession = useCallback(() => {
@@ -311,7 +311,7 @@ export default function MeasurePage() {
             value={units}
             onChange={(e) => setUnits(e.target.value as Units)}
             className="bg-black/50 text-white p-2 rounded-md"
-            disabled={selectionMode === 'calibrate-plane' || selectionMode === 'calibrate-two'} // 補正中は単位変更をロック
+            disabled={selectionMode === 'calibrate-plane' || selectionMode === 'calibrate-two'}
           >
             <option value="cm">cm</option>
             <option value="mm">mm</option>
@@ -344,14 +344,14 @@ export default function MeasurePage() {
             data-testid="reset-button"
             onClick={clearAll}
             className="bg-red-500/80 text-white p-3 rounded-full shadow-lg"
-            disabled={selectionMode === 'calibrate-plane' || selectionMode === 'calibrate-two'} // 補正中は誤タップ防止
+            disabled={selectionMode === 'calibrate-plane' || selectionMode === 'calibrate-two'}
           >
             Reset
           </button>
         </div>
       </div>
 
-      {/* 非表示のファイル入力：画面反映のみ行う */}
+      {/* 非表示のファイル入力 */}
       <input
         ref={fileInputRef}
         data-testid="hidden-file-input"

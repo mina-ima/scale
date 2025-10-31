@@ -79,6 +79,17 @@ const MeasureCalibrationPanel: React.FC = () => {
   }, [safePoints]);
 
   // ====== 等倍率（2点）校正 ======
+  const startLengthCalibration = () => {
+    setCalibMsg(null);
+    setSelectionMode('calibrate-two'); // ★ 2点補正のクリック受付に遷移
+    clearPoints();                     // ★ 既存クリック点はクリア
+  };
+
+  const cancelLengthCalibration = () => {
+    setSelectionMode('measure');
+    clearPoints();
+  };
+
   const applyLengthCalibration = () => {
     setCalibMsg(null);
     if (pxDistance == null || pxDistance <= 0) {
@@ -100,6 +111,11 @@ const MeasureCalibrationPanel: React.FC = () => {
     // 等倍率校正を適用するときは平面補正はクリア
     setHomography(null);
     setScaleMmPerPx(mmPerPx);
+
+    // ★ 補正確定 → 測定モードへ戻す＆クリック点はクリア
+    setSelectionMode('measure');
+    clearPoints();
+
     setCalibMsg(`校正を適用（mm/px = ${mmPerPx.toFixed(4)}）。以降の測定はmm表示になります。`);
   };
 
@@ -154,8 +170,11 @@ const MeasureCalibrationPanel: React.FC = () => {
       // 平面補正を有効化し、等倍率校正はクリア
       setHomography(H);
       setScaleMmPerPx(null);
+
+      // ★ 補正確定 → 測定モードへ戻す＆クリック点はクリア
       setSelectionMode('measure');
       clearPoints();
+
       setCalibMsg('平面補正を適用しました。以降の2点計測は平面mmで算出されます。');
     } catch (e) {
       console.error('computeHomography failed', e);
@@ -171,7 +190,7 @@ const MeasureCalibrationPanel: React.FC = () => {
       onTouchStart={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* ===== 校正方法選択タブ (パネルの外) ===== */}
+      {/* ===== 校正方法選択タブ ===== */}
       <div className="flex justify-center mb-2">
         <div className="bg-black/50 backdrop-blur rounded-lg shadow-lg flex">
           <button
@@ -183,6 +202,7 @@ const MeasureCalibrationPanel: React.FC = () => {
             onClick={(e) => {
               e.stopPropagation();
               setCalibrationMode('length');
+              startLengthCalibration(); // ★ 2点補正モードへ
             }}
           >
             2点補正
@@ -210,6 +230,20 @@ const MeasureCalibrationPanel: React.FC = () => {
         {calibrationMode === 'length' && (
           <div className="mt-3">
             <div className="flex items-center gap-2 flex-wrap">
+              {/* 2点補正中だけ「終了」ボタン表示（任意） */}
+              {selectionMode === 'calibrate-two' && (
+                <button
+                  className="px-3 py-1.5 rounded bg-gray-100 border hover:bg-gray-200 text-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cancelLengthCalibration();
+                  }}
+                  title="2点補正モードを終了（点はクリアされます）"
+                >
+                  終了
+                </button>
+              )}
+
               <select
                 className="border rounded px-2 py-1 text-sm"
                 value={lenKey}
@@ -238,7 +272,7 @@ const MeasureCalibrationPanel: React.FC = () => {
 
               <button
                 className={`px-3 py-1.5 rounded text-white text-sm ${
-                  safePoints.length === 2 && selectionMode !== 'calibrate-plane'
+                  selectionMode === 'calibrate-two' && safePoints.length === 2
                     ? 'bg-indigo-600 hover:bg-indigo-700'
                     : 'bg-gray-400 cursor-not-allowed'
                 }`}
@@ -246,7 +280,7 @@ const MeasureCalibrationPanel: React.FC = () => {
                   e.stopPropagation();
                   applyLengthCalibration();
                 }}
-                disabled={!(safePoints.length === 2 && selectionMode !== 'calibrate-plane')}
+                disabled={!(selectionMode === 'calibrate-two' && safePoints.length === 2)}
                 title="写真上で基準物の両端を2点タップしてから適用"
               >
                 適用
@@ -263,8 +297,9 @@ const MeasureCalibrationPanel: React.FC = () => {
                 リセット
               </button>
             </div>
+
             <div className="mt-2 text-xs text-gray-700">
-              <div>現在の点数: {safePoints.length}</div>
+              <div>現在の点数: {safePoints.length}（最大2点）</div>
               <div>
                 {pxDistance != null
                   ? <>選択中の区間: {Math.round(pxDistance)} px</>
