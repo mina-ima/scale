@@ -10,8 +10,10 @@ import {
   drawMeasurementPoint,
 } from '../core/render/drawMeasurement';
 
-// ※ スケール推定は一旦使わない
-// import { estimateScale } from '../core/reference/ScaleEstimation';
+// 4点補正モード判定とポイント積み上げのためのストア
+// - selectionMode: 'calibrate-plane' のとき4点補正中
+// - addPoint: 補正ポイントをストア側にも積む（最大4点にクリップされる想定）
+import { useMeasureStore } from '../store/measureStore';
 
 type Point = { x: number; y: number };
 type Units = 'cm' | 'mm' | 'inch';
@@ -34,6 +36,10 @@ export default function MeasurePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null); // 「写真を選ぶ」用
+
+  // ★ 追加：4点補正モード判定＆ストアへのポイント追加
+  const selectionMode = useMeasureStore((s: any) => s.selectionMode);
+  const addPointToStore = useMeasureStore((s: any) => s.addPoint); // 4点補正ポイント用
 
   // --- DPR対応: キャンバス内部サイズをCSS×DPRの整数に ---
   const resizeCanvasToContainer = useCallback(() => {
@@ -66,7 +72,7 @@ export default function MeasurePage() {
   useEffect(() => {
     if (videoRef.current && stream) {
       // @ts-expect-error: srcObject はモダンブラウザで利用可
-      videoRef.current.srcObject = stream;
+      (videoRef.current as any).srcObject = stream;
     }
   }, [stream]);
 
@@ -101,7 +107,7 @@ export default function MeasurePage() {
 
       // 背景を静止画にしたので、測定はクリア
       setPoints([]);
-      setMeasurementText('画像を表示しました。2点をタップして計測してください。');
+      setMeasurementText('画像を表示しました。2点をタップして計測、または「4点補正」を開始してください。');
     },
     []
   );
@@ -130,6 +136,33 @@ export default function MeasurePage() {
     if (!ctx || !canvasRef.current) return;
 
     setPoints((prev) => {
+      // ★ 分岐：4点補正モード中は消去せず、最大4点まで保持＆表示
+      if (selectionMode === 'calibrate-plane') {
+        const next = [...prev, p].slice(-4);
+
+        // クリック点を表示（番号付与も検討可）
+        drawMeasurementPoint(ctx, p);
+
+        // ストアにも積む（measureStore側で最大4点にクリップされる想定）
+        try {
+          if (typeof addPointToStore === 'function') {
+            addPointToStore(p);
+          }
+        } catch {
+          // ストア未定義でもUIは動作継続
+        }
+
+        // 補正用のガイダンス
+        const n = next.length;
+        if (n < 4) {
+          setMeasurementText(`補正ポイント ${n}/4：続けてタップしてください`);
+        } else {
+          setMeasurementText('4/4 点が選択されました。「適用」を押してください');
+        }
+        return next;
+      }
+
+      // 通常の2点計測モード：3点目でリセット→1点目から
       if (prev.length >= 2) {
         ctx.clearRect(0, 0, canvasRef.current!.width, canvasRef.current!.height);
         setMeasurementText('');
@@ -150,7 +183,7 @@ export default function MeasurePage() {
 
       return next;
     });
-  }, [toInternalPoint, units]);
+  }, [toInternalPoint, units, selectionMode, addPointToStore]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -169,7 +202,7 @@ export default function MeasurePage() {
       return;
     }
     drawCoverToCanvas(v, v.videoWidth, v.videoHeight);
-    setMeasurementText('写真を取り込みました。2点をタップして計測してください。');
+    setMeasurementText('写真を取り込みました。2点計測または「4点補正」を行ってください。');
   }, [drawCoverToCanvas]);
 
   const onPickPhoto = useCallback(() => {
@@ -180,11 +213,11 @@ export default function MeasurePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // スケール推定は呼ばず、まず画面に確実に反映
+    // 画面に確実に反映
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      drawCoverToCanvas(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+      drawCoverToCanvas(img, (img as HTMLImageElement).naturalWidth || (img as HTMLImageElement).width, (img as HTMLImageElement).naturalHeight || (img as HTMLImageElement).height);
       URL.revokeObjectURL(url);
     };
     img.onerror = () => {
@@ -236,7 +269,7 @@ export default function MeasurePage() {
         onTouchStart={(e) => e.stopPropagation()}
       >
         <div data-testid="measurement-readout" aria-live="polite" className="bg-black/50 text-white p-2 rounded-md m-2 inline-block">
-          {measurementText || 'タップして計測を開始'}
+          {measurementText || (selectionMode === 'calibrate-plane' ? '補正ポイントを4点タップしてください' : 'タップして計測を開始')}
         </div>
 
         <div className="absolute top-2 right-2">
@@ -247,6 +280,7 @@ export default function MeasurePage() {
             value={units}
             onChange={(e) => setUnits(e.target.value as Units)}
             className="bg-black/50 text-white p-2 rounded-md"
+            disabled={selectionMode === 'calibrate-plane'} // 補正中は単位変更をロック（任意）
           >
             <option value="cm">cm</option>
             <option value="mm">mm</option>
@@ -279,6 +313,7 @@ export default function MeasurePage() {
             data-testid="reset-button"
             onClick={clearAll}
             className="bg-red-500/80 text-white p-3 rounded-full shadow-lg"
+            disabled={selectionMode === 'calibrate-plane'} // 補正中は誤タップ防止でリセット無効（任意）
           >
             Reset
           </button>
