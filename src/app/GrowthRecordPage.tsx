@@ -1,18 +1,10 @@
+// src/app/GrowthRecordPage.tsx
 import React from 'react';
-import GrowthMeasurementTabContent from './GrowthMeasurementTabContent';
+import MeasurePage from './MeasurePage';
 
+// 成長記録モード = 計測モードと完全同一のUI/挙動を使用
 const GrowthRecordPage: React.FC = () => {
-  return (
-    <div className="relative flex flex-col h-screen w-full">
-      <h1 className="text-center text-xl font-bold p-4 bg-gray-100 shadow-md">
-        成長記録モード
-      </h1>
-      <div className="flex-grow relative">
-        {/* GrowthMeasurementTabContentのmodeプロパティは削除 */}
-        <GrowthMeasurementTabContent mode={null} />
-      </div>
-    </div>
-  );
+  return <MeasurePage />;
 };
 
 export default GrowthRecordPage;
