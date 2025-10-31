@@ -18,6 +18,7 @@ type Units = 'cm' | 'mm' | 'inch';
 // 背景静止画の原寸キャッシュ
 type CoverCache = { offscreen: HTMLCanvasElement };
 
+// --- 基本ユーティリティ ---
 function distancePx(a: Point, b: Point) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
@@ -34,6 +35,27 @@ function formatMmToUnit(mm: number, units: Units): string {
   }
 }
 
+// --- ホモグラフィ適用（画像px座標 -> 実平面mm座標） ---
+// H は長さ9の number 配列 [h0..h8] を想定
+function applyHomography(H: number[] | null | undefined, p: Point): { x: number; y: number } | null {
+  if (!H || H.length !== 9) return null;
+  const [h0, h1, h2, h3, h4, h5, h6, h7, h8] = H;
+  const w = h6 * p.x + h7 * p.y + h8;
+  if (Math.abs(w) < 1e-8) return null;
+  const xw = (h0 * p.x + h1 * p.y + h2) / w; // mm座標系（MeasureCalibrationPanel 側が mm 基準で H を作成）
+  const yw = (h3 * p.x + h4 * p.y + h5) / w;
+  return { x: xw, y: yw };
+}
+
+function distanceMmWithHomography(H: number[] | null | undefined, a: Point, b: Point): number | null {
+  const A = applyHomography(H, a);
+  const B = applyHomography(H, b);
+  if (!A || !B) return null;
+  const dx = B.x - A.x;
+  const dy = B.y - A.y;
+  return Math.sqrt(dx * dx + dy * dy); // 既に mm
+}
+
 export default function MeasurePage() {
   const { stream, startCamera, stopCamera, toggleCameraFacingMode } = useCamera() as any;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -46,14 +68,15 @@ export default function MeasurePage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ストア
+  // ストア状態
   const selectionMode = useMeasureStore((s: any) => s.selectionMode);  // 'measure' | 'calibrate-two' | 'calibrate-plane'
   const addPointToStore = useMeasureStore((s: any) => s.addPoint);
+  const homography = useMeasureStore((s: any) => s.homography) as number[] | null | undefined;
   const mmPerPx = useMeasureStore((s: any) =>
     typeof s?.mmPerPx === 'number' ? s.mmPerPx : s?.scale?.mmPerPx
   ) as number | undefined;
 
-  // 背景キャッシュ（リセット押下まで維持）
+  // 背景キャッシュ
   const coverCacheRef = useRef<CoverCache | null>(null);
 
   // DPR対応
@@ -138,7 +161,6 @@ export default function MeasurePage() {
     // 表示
     repaintBase(ctx);
 
-    // ガイダンス
     setPoints([]);
     setMeasurementText('画像を表示しました。補正ポイントを指定して「適用」→その後に計測してください。');
   }, [repaintBase]);
@@ -202,25 +224,39 @@ export default function MeasurePage() {
 
       if (next.length === 2) {
         const [a, b] = next;
-        const px = distancePx(a, b);
 
+        // 1) 平面補正があれば：画像px→実平面mmへ射影し、mm距離を採用
+        const mmViaH = distanceMmWithHomography(homography, a, b);
+        if (mmViaH != null && Number.isFinite(mmViaH) && mmViaH > 0) {
+          const label = formatMmToUnit(mmViaH, units);
+          setMeasurementText(label);
+          drawMeasurementLine(ctx, a, b, { units } as any);
+          drawMeasurementLabel(ctx, a, b, label);
+          return next;
+        }
+
+        // 2) 等倍率（mmPerPx）があれば：px→mm換算
         if (typeof mmPerPx === 'number' && Number.isFinite(mmPerPx) && mmPerPx > 0) {
+          const px = distancePx(a, b);
           const mm = px * mmPerPx;
           const label = formatMmToUnit(mm, units);
           setMeasurementText(label);
           drawMeasurementLine(ctx, a, b, { units } as any);
           drawMeasurementLabel(ctx, a, b, label);
-        } else {
-          const label = `${px.toFixed(0)} px（未校正）`;
-          setMeasurementText(label);
-          drawMeasurementLine(ctx, a, b, { units } as any);
-          drawMeasurementLabel(ctx, a, b, label);
+          return next;
         }
+
+        // 3) 補正無し：px（未校正）
+        const px = distancePx(a, b);
+        const label = `${px.toFixed(0)} px（未校正）`;
+        setMeasurementText(label);
+        drawMeasurementLine(ctx, a, b, { units } as any);
+        drawMeasurementLabel(ctx, a, b, label);
       }
 
       return next;
     });
-  }, [toInternalPoint, units, selectionMode, addPointToStore, mmPerPx, repaintBase]);
+  }, [toInternalPoint, units, selectionMode, addPointToStore, mmPerPx, homography, repaintBase]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('[data-ui-control="true"]')) return; // UIは除外
