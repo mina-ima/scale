@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>はかったけ（scale）取扱説明書</title>
+<style>
+:root{--fg:#1a1a1a;--muted:#666;--accent:#2563eb;--bg:#fff;--code:#f4f4f5;--border:#e5e7eb}*{box-sizing:border-box}body{font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.8;color:var(--fg);background:var(--bg);max-width:820px;margin:0 auto;padding:24px 18px}h1{font-size:1.7rem;border-bottom:3px solid var(--accent);padding-bottom:.4em;margin-top:0}h2{font-size:1.3rem;margin-top:2em;border-left:5px solid var(--accent);padding-left:.5em}h3{font-size:1.1rem;margin-top:1.5em}code{background:var(--code);padding:.15em .4em;border-radius:4px;font-size:.9em}pre{background:var(--code);padding:14px;border-radius:8px;overflow-x:auto}pre code{background:none;padding:0}table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid var(--border);padding:8px 10px;text-align:left}th{background:#f8fafc}blockquote{border-left:4px solid var(--accent);background:#f0f6ff;margin:1em 0;padding:.6em 1em;color:#334}a{color:var(--accent)}footer{margin-top:3em;padding-top:1em;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem}@media(max-width:600px){body{padding:16px 12px}h1{font-size:1.4rem}}
+</style>
+</head>
+<body>
+<h1>はかったけ（scale）取扱説明書</h1>
+<blockquote>インストール不要、ブラウザだけで使える「ものの長さ・大きさを測る」アプリです。お子さんの成長記録にも使えます。</blockquote>
+
+<h2>このアプリでできること</h2>
+<ul>
+<li>家具や部屋など、身のまわりのものの大きさを画面上で測れます（最大10メートル程度を想定）。</li>
+<li>お子さんの成長記録として、身長・足のサイズ・手のサイズを測れます。体重は手入力できます。</li>
+<li>成長記録モードでは、測定結果（数値・日付つきの合成画像）を端末に保存できます。</li>
+<li>すべての処理が端末内で完結し、写真やデータは外部サーバーに送られません（プライバシー重視）。</li>
+</ul>
+<blockquote>注記: 機能はプロジェクト資料（GEMINI.md）に基づきます。AR対応端末では WebXR、非対応端末では基準物（A4用紙・カード・硬貨など）を使う写真ベースの測定にフォールバックします。</blockquote>
+
+<h2>想定ユーザー・利用シーン</h2>
+<ul>
+<li>メジャーが手元にないときに、サッと大きさを測りたい方。</li>
+<li>お子さんの身長・手足のサイズを定期的に記録したい保護者の方。</li>
+<li>写真やデータを外部に送りたくない、プライバシーを重視する方。</li>
+</ul>
+
+<h2>動作環境・前提</h2>
+<ul>
+<li>スマートフォン／パソコンの最近のブラウザ（Chrome / Safari など）。</li>
+<li>AR測定には WebXR 対応端末・カメラが必要です。</li>
+<li>WebXR 非対応の端末では、写真の中に基準物（A4用紙・クレジットカード・硬貨など）を写して縮尺を補正する方式で測定します。</li>
+</ul>
+
+<h2>セットアップ</h2>
+<p>ふだん使う方は、公開URL（後述）をブラウザで開くだけで利用できます。自分で動かす（開発する）場合は次の手順です（パッケージマネージャーは pnpm 推奨）。</p>
+<ol>
+<li>リポジトリを取得します。
+<pre><code>git clone https://github.com/mina-ima/scale.git
+cd scale</code></pre></li>
+<li>依存パッケージをインストールします。
+<pre><code>pnpm install</code></pre></li>
+<li>開発サーバーを起動します。
+<pre><code>pnpm dev</code></pre>
+表示されたローカルURLをブラウザで開きます。</li>
+</ol>
+
+<h2>使い方（ステップbyステップ）</h2>
+<h3>測定モード（保存しない）</h3>
+<ol>
+<li>アプリを開き、測定モードを選びます。</li>
+<li>カメラを対象物に向けます。</li>
+<li>画面上で始点・終点を指定すると、長さがリアルタイムに表示されます（このモードでは保存されません）。</li>
+</ol>
+<h3>成長記録モード（保存する）</h3>
+<ol>
+<li>成長記録モードを選びます。</li>
+<li>身長・足のサイズ・手のサイズなどを測定します。体重は手入力できます。</li>
+<li>測定値・日付つきの合成画像が、端末のギャラリーに自動保存されます。</li>
+</ol>
+<h3>WebXR 非対応の端末の場合</h3>
+<ol>
+<li>測りたいものと一緒に、基準物（A4用紙・カード・硬貨など）を写して撮影します。</li>
+<li>アプリが基準物の大きさを使って縮尺を補正し、寸法を計算します。</li>
+</ol>
+
+<h2>主な機能</h2>
+<table>
+<tr><th>機能</th><th>説明</th></tr>
+<tr><td>測定モード</td><td>家具・部屋などの長さをリアルタイム表示（保存なし）</td></tr>
+<tr><td>成長記録モード</td><td>身長・足・手のサイズを測定、体重は手入力、合成画像を保存</td></tr>
+<tr><td>AR測定</td><td>WebXR 対応端末でAR測定</td></tr>
+<tr><td>写真ベース測定</td><td>非対応端末で基準物を使い縮尺補正</td></tr>
+<tr><td>端末内処理</td><td>写真・データを外部送信しない</td></tr>
+</table>
+
+<h2>よくある質問・トラブルシューティング</h2>
+<ul>
+<li><strong>Q. AR測定ができません。</strong> A. 端末が WebXR に対応していない可能性があります。その場合は、基準物（A4用紙・カード・硬貨）を一緒に写す写真ベースの測定をご利用ください。</li>
+<li><strong>Q. 測定値がずれます。</strong> A. 写真ベースの測定では、基準物が平らに・はっきり写っているほど精度が上がります。明るい場所で撮影してください。</li>
+<li><strong>Q. データは外部に送られますか？</strong> A. いいえ。すべて端末内で処理・保存され、外部サーバーには送信されません。</li>
+<li><strong>Q. 測定モードのデータが残りません。</strong> A. 測定モードは保存しない仕様です。記録を残したい場合は成長記録モードを使ってください。</li>
+</ul>
+
+<h2>開発者向けメモ</h2>
+<ul>
+<li><strong>技術スタック</strong>: Vite + React + TypeScript。3D/AR= Three.js + WebXR。フォールバックの画像処理= OpenCV（<code>opencv-ts</code> / CDNの opencv.js）。状態管理= Zustand。ルーティング= React Router。テスト= Vitest（単体）+ Playwright（E2E）。</li>
+<li><strong>エントリ</strong>: <code>index.html</code> → <code>src/main.tsx</code>。ソースは <code>src/</code>（<code>core</code> / <code>features</code> / <code>components</code> / <code>utils</code> などに分割）。</li>
+<li><strong>デプロイ先</strong>: Vercel（静的サイト）。<code>.vercel</code> プロジェクト名は <code>scale</code>。<code>main</code> ブランチを本番、PR でプレビューを自動デプロイ（GEMINI.md記載）。</li>
+<li><strong>本番URL</strong>: 未確認（Vercel連携あり。具体的な公開URLはVercel/リポジトリ設定を参照）。</li>
+<li><strong>リポジトリ</strong>: <a href="https://github.com/mina-ima/scale">https://github.com/mina-ima/scale</a></li>
+</ul>
+<h3>起動・ビルド・テスト</h3>
+<pre><code>pnpm install
+pnpm dev           # 開発サーバー
+pnpm build         # 本番ビルド（dist/ に出力）
+pnpm test          # 単体テスト（vitest）
+pnpm test:e2e      # E2Eテスト（playwright）
+pnpm typecheck     # 型チェック</code></pre>
+
+<footer>このページは自動生成された取扱説明書です。</footer>
+</body>
+</html>
